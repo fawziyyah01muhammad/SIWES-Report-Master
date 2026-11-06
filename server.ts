@@ -142,6 +142,7 @@ async function startServer() {
         formatGuideline,
         customGuidelineText,
         additionalNotes,
+        referencingStyle = 'apa-7',
       } = req.body as {
         studentInfo: StudentInfo;
         logbookNotes?: string;
@@ -149,6 +150,7 @@ async function startServer() {
         formatGuideline?: string;
         customGuidelineText?: string;
         additionalNotes?: string;
+        referencingStyle?: string;
       };
 
       if (!studentInfo || !studentInfo.name || !studentInfo.institution) {
@@ -164,6 +166,15 @@ async function startServer() {
           error: 'Please upload at least one scanned logbook page or provide logbook activity notes.',
         });
       }
+
+      const styleNames: Record<string, string> = {
+        'apa-7': 'APA 7th Edition (Author, Year)',
+        'ieee': 'IEEE Style ([1] Numbered Citations)',
+        'harvard': 'Harvard Style (Author, Year)',
+        'mla': 'MLA 9th Edition',
+        'vancouver': 'Vancouver / Numeric Style',
+      };
+      const activeStyleName = styleNames[referencingStyle] || 'APA 7th Edition';
 
       const systemInstruction = `You are an expert academic technical writing specialist and engineering evaluator specializing in higher institution Students Industrial Work Experience Scheme (SIWES) technical reports formatted for physical binding and defense submission.
 
@@ -192,19 +203,26 @@ Guidelines for Report Generation:
      ## 3.2 Weekly Activity Matrix (A clean Markdown Table summarizing weeks, units, core tasks, and technologies)
      ## 3.3 Detailed Technical Projects & Case Studies (Deep-dive breakdown of major tasks completed from the logbook, with step-by-step methodologies and practical engineering/scientific principles)
      ## 3.4 Technical Diagrams / Flowchart Descriptions (Include [Figure 3.1: ...], [Figure 3.2: ...] illustrating the workflows)
-   - # CHAPTER FOUR: CHALLENGES ENCOUNTERED AND SOLUTIONS PROFFERED
-     ## 4.1 Industrial and Operational Challenges
-     ## 4.2 Practical Troubleshooting & Problem-Solving Approaches
-     ## 4.3 Lessons Learned and Professional Growth
+   - # CHAPTER FOUR: SUMMARY OF INDUSTRIAL TRAINING (IT) EXPERIENCE, CHALLENGES AND SOLUTIONS
+     ## 4.1 Summary of Industrial Training Experience (Comprehensive overview and synthesis of the entire attachment period, department deployments, technologies handled, and core professional competencies gained)
+     ## 4.2 Industrial and Operational Challenges Encountered (Technical, organizational, environmental, and infrastructural challenges faced during the placement)
+     ## 4.3 Practical Troubleshooting and Solutions Proffered (Direct engineering, scientific, and procedural solutions applied to overcome each challenge)
+     ## 4.4 Lessons Learned and Professional Growth (Skills mastered, ethical standards observed, and readiness for industrial practice)
    - # CHAPTER FIVE: CONCLUSION, RECOMMENDATIONS & IMPACT
      ## 5.1 Conclusion (Synthesis of industrial attachment value)
      ## 5.2 Recommendations to the Academic Institution
      ## 5.3 Recommendations to the Host Establishment
      ## 5.4 Advice to Prospective Students
-   - # REFERENCES (Standard APA or IEEE referencing format)
+   - # REFERENCES (Authentic scholarly textbooks, engineering manuals, peer-reviewed journals, and statutory guidelines formatted strictly in ${activeStyleName})
    - # APPENDIX (Form verification reference, logbook entry notes)
 
-4. PRESENTATION DISCIPLINE (PLAIN FORMATTING):
+4. SCHOLARLY CITATIONS & REFERENCES (${activeStyleName}):
+   - Include genuine, peer-reviewed academic textbooks, authoritative industry manuals, and recognized journals specific to the student's field (${studentInfo.department || 'the discipline'}).
+   - For engineering/computing/sciences, cite recognized standard literature (e.g., Sommerville, Silberschatz, Pressman for Computing; Shigley/Budynas, Theraja, Boylestad for Engineering; Lehninger, Cheesbrough for Sciences; and official Industrial Training Fund [ITF] guidelines).
+   - Place in-text citations naturally in Chapters 1, 2, and 3.
+   - In the # REFERENCES section, list at least 6-8 complete, academically authentic references strictly formatted in ${activeStyleName}.
+
+5. PRESENTATION DISCIPLINE (PLAIN FORMATTING):
    - Do NOT output any duplicate cover page, student name headers, or signature lines at the beginning. Start immediately with # DEDICATION.
    - The report must be completely plain and formal. Do not include any decorative designs, HTML styling, font colors, emojis, badges, or callout blocks.
    - Always use standard markdown headers (# for Chapter titles, ## for Sections, ### for Sub-sections), plain standard markdown tables (| Header 1 | Header 2 |), plain paragraphs, and numbered or bulleted lists.
@@ -241,13 +259,15 @@ STUDENT & ATTACHMENT PROFILE:
 - Host Address/Location: ${studentInfo.hostAddress || 'Nigeria'}
 - Primary Unit/Department Placed: ${studentInfo.unit || 'Technical Operations'}
 - Attachment Duration: ${studentInfo.duration || '6 Months'}
-- Academic Session/Year: ${studentInfo.academicYear || '2024/2025'}
+- Academic Session/Year: ${studentInfo.academicYear || 'Current Academic Session'}
 - Industry-Based Supervisor: ${studentInfo.industrySupervisor || 'Engr./Mr./Mrs. Industry Supervisor'}
 - Institutional/Academic Supervisor: ${studentInfo.academicSupervisor || 'Dr./Prof. Institutional Supervisor'}
 - Head of Department: ${studentInfo.headOfDepartment || 'Head of Department'}
 
-SELECTED TECHNICAL REPORT FORMAT:
-${formatGuideline || 'Universal 5-Chapter Technical Report Standard'}
+SELECTED TECHNICAL REPORT FORMAT & CITATION STYLE:
+- Format Standard: ${formatGuideline || 'Universal 5-Chapter Technical Report Standard'}
+- Referencing Style: ${activeStyleName} (Generate authentic discipline-specific books and journals with in-text citations)
+- Chapter 4 Requirement: You MUST include Section 4.1 "Summary of Industrial Training Experience" before Section 4.2 "Industrial and Operational Challenges Encountered".
 ${customGuidelineText ? `CUSTOM DEPARTMENTAL INSTRUCTIONS:\n${customGuidelineText}\n` : ''}
 ${additionalNotes ? `SPECIAL EMPHASIS DIRECTIVES:\n${additionalNotes}\n` : ''}
 

@@ -41,16 +41,29 @@
   font-weight: 700;
   text-transform: uppercase;
   text-align: center;
-  margin-top: 2rem;
-  margin-bottom: 1rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.25rem;
   color: #000000;
-  border-bottom: 1px solid #000000;
-  padding-bottom: 0.35rem;
+  border-bottom: none;
+  padding-bottom: 0;
   page-break-before: always;
+  break-before: page;
+}
+
+.pdf-section {
+  background-color: #ffffff;
+  position: relative;
+  page-break-before: always;
+  break-before: page;
+}
+
+.pdf-section:first-child,
+.pdf-section.cover-page-section {
+  page-break-before: avoid !important;
+  break-before: avoid !important;
 }
 
 .academic-doc h1:first-of-type {
-  page-break-before: avoid;
   margin-top: 0;
 }
 

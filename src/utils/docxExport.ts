@@ -365,12 +365,13 @@ export async function exportStructuredDocx(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 200, after: 0 },
-      border: {
-        top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-      },
       children: [
         new TextRun({
-          text: studentInfo.academicYear || '2024/2025 ACADEMIC SESSION',
+          text: studentInfo.academicYear
+            ? (studentInfo.academicYear.toUpperCase().includes('SESSION')
+                ? studentInfo.academicYear.toUpperCase()
+                : `${studentInfo.academicYear.toUpperCase()} ACADEMIC SESSION`)
+            : 'ACADEMIC SESSION',
           font: 'Times New Roman',
           size: 22,
           bold: true,
@@ -643,9 +644,6 @@ export async function exportStructuredDocx(
           alignment: AlignmentType.CENTER,
           pageBreakBefore: isChapterOrMajor,
           spacing: { before: 360, after: 200 },
-          border: {
-            bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-          },
           children: [
             new TextRun({
               text: headingText.toUpperCase(),

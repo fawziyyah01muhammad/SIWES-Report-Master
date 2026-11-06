@@ -12,7 +12,7 @@ import { FormatSelector } from './components/FormatSelector';
 import { ReportViewer } from './components/ReportViewer';
 import { PreDefenseReviewModal } from './components/PreDefenseReviewModal';
 import { GuidelinesModal } from './components/GuidelinesModal';
-import { StudentInfo, UploadedImage, SampleDataset, TechnicalReviewData } from './types/siwes';
+import { StudentInfo, UploadedImage, SampleDataset, TechnicalReviewData, ReferencingStyle } from './types/siwes';
 
 const DEFAULT_STUDENT_INFO: StudentInfo = {
   name: '',
@@ -25,7 +25,7 @@ const DEFAULT_STUDENT_INFO: StudentInfo = {
   hostAddress: '',
   unit: '',
   duration: '6 Months',
-  academicYear: '2024/2025',
+  academicYear: '',
   industrySupervisor: '',
   academicSupervisor: '',
   headOfDepartment: '',
@@ -101,6 +101,7 @@ export default function App() {
   const [selectedFormat, setSelectedFormat] = useState<string>('universal-5ch');
   const [customGuidelineText, setCustomGuidelineText] = useState<string>('');
   const [additionalNotes, setAdditionalNotes] = useState<string>('');
+  const [referencingStyle, setReferencingStyle] = useState<ReferencingStyle>('apa-7');
   
   // App views & modals
   const [viewMode, setViewMode] = useState<'form' | 'report'>('form');
@@ -215,6 +216,7 @@ export default function App() {
           formatGuideline: selectedFormat,
           customGuidelineText,
           additionalNotes,
+          referencingStyle,
         }),
       });
 
@@ -377,7 +379,7 @@ export default function App() {
               onLoadSampleNotes={handleLoadSampleNotes}
             />
 
-            {/* Step 3: Technical Report Format */}
+            {/* Step 3: Technical Report Format & Referencing Style */}
             <FormatSelector
               selectedFormat={selectedFormat}
               onSelectFormat={setSelectedFormat}
@@ -385,6 +387,10 @@ export default function App() {
               onCustomGuidelineChange={setCustomGuidelineText}
               additionalNotes={additionalNotes}
               onAdditionalNotesChange={setAdditionalNotes}
+              referencingStyle={referencingStyle}
+              onReferencingStyleChange={setReferencingStyle}
+              studentDepartment={studentInfo.department}
+              studentFaculty={studentInfo.faculty}
             />
 
             {/* Generate CTA Button Container */}
@@ -452,6 +458,8 @@ export default function App() {
             onOpenPreDefenseReview={handleOpenPreDefenseReview}
             onBackToEdit={() => setViewMode('form')}
             wordCount={wordCount}
+            referencingStyle={referencingStyle}
+            onReferencingStyleChange={setReferencingStyle}
           />
         )}
       </main>

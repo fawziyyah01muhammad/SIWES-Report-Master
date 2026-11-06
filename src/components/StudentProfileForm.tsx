@@ -110,9 +110,9 @@ export const StudentProfileForm: React.FC<StudentProfileFormProps> = ({
           </div>
         </div>
 
-        {/* Row 3: Faculty & Level */}
+        {/* Row 3: Faculty, Level & Academic Session */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-          <div className="sm:col-span-2">
+          <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">
               Faculty / School
             </label>
@@ -140,6 +140,23 @@ export const StudentProfileForm: React.FC<StudentProfileFormProps> = ({
               <option value="HND II (Polytechnic)">HND II (Polytechnic)</option>
               <option value="ND II (Polytechnic)">ND II (Polytechnic)</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
+              <span>Academic Session / Year</span>
+              <span className="text-[10px] text-[#801828] font-medium">Custom</span>
+            </label>
+            <div className="relative">
+              <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="e.g. 2025/2026 or 2023/2024"
+                value={studentInfo.academicYear}
+                onChange={(e) => handleChange('academicYear', e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#801828] focus:border-[#801828] text-gray-800 transition"
+              />
+            </div>
           </div>
         </div>
 
