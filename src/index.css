@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --maroon-900: #4A0E17;
+    --maroon-800: #6B1522;
+    --maroon-700: #801828;
+    --maroon-600: #9B1D30;
+    --maroon-500: #B8283E;
+    --maroon-100: #F7EAEB;
+    --maroon-50: #FCF5F5;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #FAFAFA;
+    color: #1F2937;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.font-academic {
+  font-family: 'Lora', 'Times New Roman', Georgia, serif;
+}
+
+.font-heading {
+  font-family: 'Cinzel', 'Lora', serif;
+}
+
+/* Plain academic document styling: plain background, black words, standard black-bordered tables */
+.academic-doc {
+  font-family: 'Lora', 'Times New Roman', Georgia, serif;
+  line-height: 1.6;
+  color: #000000;
+  background-color: #ffffff;
+  text-align: justify;
+}
+
+.academic-doc h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: center;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: #000000;
+  border-bottom: 1px solid #000000;
+  padding-bottom: 0.35rem;
+  page-break-before: always;
+}
+
+.academic-doc h1:first-of-type {
+  page-break-before: avoid;
+  margin-top: 0;
+}
+
+.academic-doc h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.6rem;
+  color: #000000;
+}
+
+.academic-doc h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.4rem;
+  color: #000000;
+}
+
+.academic-doc p {
+  margin-bottom: 0.85rem;
+  text-indent: 1.5rem;
+  color: #000000;
+}
+
+.academic-doc p.no-indent {
+  text-indent: 0;
+}
+
+.academic-doc ul, .academic-doc ol {
+  margin-bottom: 0.85rem;
+  padding-left: 2rem;
+  color: #000000;
+}
+
+.academic-doc ul {
+  list-style-type: disc;
+}
+
+.academic-doc ol {
+  list-style-type: decimal;
+}
+
+.academic-doc li {
+  margin-bottom: 0.3rem;
+  color: #000000;
+}
+
+.academic-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 0.95rem;
+  background-color: #ffffff;
+  border: 1px solid #000000;
+}
+
+.academic-doc th, .academic-doc td {
+  border: 1px solid #000000;
+  padding: 6px 10px;
+  text-align: left;
+  color: #000000;
+  background-color: #ffffff;
+}
+
+.academic-doc th {
+  background-color: #ffffff;
+  color: #000000;
+  font-weight: 700;
+}
+
+.academic-doc tr td {
+  background-color: #ffffff !important;
+}
+
+.academic-doc blockquote {
+  border-left: 2px solid #000000;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: #000000;
+  background-color: #ffffff;
+}
+
+/* Print optimization for defense-ready submission */
+@media print {
+  body {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    font-size: 12pt;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+  
+  .academic-doc {
+    line-height: 1.5;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+  }
+
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+}

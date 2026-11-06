@@ -1,0 +1,6 @@
+{
+  "name": "SIWES Master: AI Technical Report Generator",
+  "description": "AI assistant that transforms scanned student logbooks and departmental templates into beautifully structured SIWES technical reports ready for physical submission.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
