@@ -101,33 +101,35 @@ async function generateContentWithFallback(
   throw lastError || new Error('Report generation failed. Please click Try Again or verify logbook content.');
 }
 
-async function startServer() {
-  const app = express();
-  app.use(express.json({ limit: '60mb' }));
-  app.use(express.urlencoded({ limit: '60mb', extended: true }));
+export const app = express();
+app.use(express.json({ limit: '60mb' }));
+app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
-  // Initialize server-side Gemini client
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
+// Initialize server-side Gemini client
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
     },
-  });
+  },
+});
 
-  // Health check
-  app.get('/api/health', (_req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.json({
-      status: 'ok',
-      hasApiKey: Boolean(process.env.GEMINI_API_KEY),
-      service: 'SIWES Technical Report Generator API',
-    });
-  });
+// Create API router for modular routing
+const apiRouter = express.Router();
 
-  // Generate SIWES Technical Report
-  app.post('/api/generate-siwes-report', async (req: Request, res: Response) => {
+// Health check
+apiRouter.get('/health', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json({
+    status: 'ok',
+    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+    service: 'SIWES Technical Report Generator API',
+  });
+});
+
+// Generate SIWES Technical Report
+apiRouter.post('/generate-siwes-report', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/json');
     try {
       if (!process.env.GEMINI_API_KEY) {
@@ -311,7 +313,7 @@ Analyze all the scanned logbook PDF documents, page images, and notes provided a
   });
 
   // Expand / Deepen a specific report section to reach 20-50 pages
-  app.post('/api/expand-chapter', async (req: Request, res: Response) => {
+  apiRouter.post('/expand-chapter', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/json');
     try {
       if (!process.env.GEMINI_API_KEY) {
@@ -396,7 +398,7 @@ Substantially expand and deepen this report. Add technical case studies, expand 
   });
 
   // Pre-Defense Evaluation Endpoint
-  app.post('/api/coordinator-review', async (req: Request, res: Response) => {
+  apiRouter.post('/coordinator-review', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/json');
     try {
       if (!process.env.GEMINI_API_KEY) {
@@ -466,7 +468,7 @@ Return your response strictly in valid JSON format matching this schema:
   });
 
   // Sample data endpoint for quick testing
-  app.get('/api/sample-datasets', (_req: Request, res: Response) => {
+  apiRouter.get('/sample-datasets', (_req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/json');
     res.json({
       samples: [
@@ -587,15 +589,22 @@ Week 10: Stability testing under accelerated climate conditions (40°C / 75% RH)
     });
   });
 
-  // API 404 handler: ensure unhandled API endpoints always return JSON, not HTML
-  app.all('/api/*', (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.status(404).json({
-      success: false,
-      error: `API route ${req.method} ${req.originalUrl} not found.`,
-    });
-  });
+// Mount router on both '/api' and '/' to ensure full compatibility with Vercel rewrites and standalone dev
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
+// API 404 handler: ensure unhandled API endpoints always return JSON, not HTML
+app.all('/api/*', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.status(404).json({
+    success: false,
+    error: `API route ${req.method} ${req.originalUrl} not found.`,
+  });
+});
+
+export default app;
+
+async function startServer() {
   // Setup Vite development middlewares or serve static build
   if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
@@ -616,7 +625,10 @@ Week 10: Stability testing under accelerated climate conditions (40°C / 75% RH)
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+// Only start HTTP listener when running as a standalone server (not on Vercel)
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}

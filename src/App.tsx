@@ -228,11 +228,14 @@ export default function App() {
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
         const rawText = await response.text();
+        if (response.status === 404) {
+          throw new Error('Backend API endpoint not found (404). If deployed on Vercel, ensure vercel.json is deployed and GEMINI_API_KEY is configured in Project Settings > Environment Variables.');
+        }
         if (response.status === 413) {
           throw new Error('The uploaded scanned page photos are too large. Please remove a few pages or use lower resolution photos.');
         }
         if (response.status === 502 || response.status === 503 || response.status === 504) {
-          throw new Error('The AI generation server experienced high demand. Please click "Try Again" below.');
+          throw new Error('The AI generation server experienced high demand or timed out. Please click "Try Again" below.');
         }
         throw new Error(`The server encountered an issue (${response.status}). Please try again.`);
       }
