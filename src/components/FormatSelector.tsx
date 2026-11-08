@@ -3,7 +3,7 @@ import {
   FileCode, Upload, FileText, CheckCircle, ChevronDown, ChevronUp, 
   Sliders, BookOpen, Quote, Sparkles 
 } from 'lucide-react';
-import { STANDARD_FORMATS, REFERENCING_STYLES, ReferencingStyle } from '../types/siwes';
+import { STANDARD_FORMATS, REFERENCING_STYLES, ReferencingStyle, REPORT_DEPTH_OPTIONS, ReportDepth } from '../types/siwes';
 import { getRecommendedReferencesForStudent } from '../utils/referenceCatalog';
 
 interface FormatSelectorProps {
@@ -15,6 +15,8 @@ interface FormatSelectorProps {
   onAdditionalNotesChange: (notes: string) => void;
   referencingStyle: ReferencingStyle;
   onReferencingStyleChange: (style: ReferencingStyle) => void;
+  reportDepth?: ReportDepth;
+  onReportDepthChange?: (depth: ReportDepth) => void;
   studentDepartment?: string;
   studentFaculty?: string;
 }
@@ -28,6 +30,8 @@ export const FormatSelector: React.FC<FormatSelectorProps> = ({
   onAdditionalNotesChange,
   referencingStyle,
   onReferencingStyleChange,
+  reportDepth = 'comprehensive-20-35',
+  onReportDepthChange,
   studentDepartment = '',
   studentFaculty = '',
 }) => {
@@ -119,6 +123,62 @@ export const FormatSelector: React.FC<FormatSelectorProps> = ({
               </div>
             );
           })}
+        </div>
+
+        {/* Target Report Volume & Academic Depth (20 to 50 Pages) */}
+        <div className="pt-3 border-t border-gray-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
+            <div className="flex items-center space-x-1.5">
+              <Sparkles className="w-4 h-4 text-[#801828]" />
+              <label className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                Target Volume & Academic Depth (20 – 50 Pages)
+              </label>
+            </div>
+            <span className="text-[11px] text-gray-500">
+              Expands logbook content into publication-grade defense monograph
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {REPORT_DEPTH_OPTIONS.map((opt) => {
+              const isSelected = reportDepth === opt.id;
+              return (
+                <div
+                  key={opt.id}
+                  onClick={() => onReportDepthChange && onReportDepthChange(opt.id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-[#801828] bg-rose-50/60 ring-1 ring-[#801828] shadow-xs'
+                      : 'border-gray-200 hover:border-rose-200 bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-900">
+                        {opt.name}
+                      </span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold ${
+                        isSelected
+                          ? 'bg-[#801828] text-white'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {opt.targetPages}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed">
+                      {opt.description}
+                    </p>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
+                    <span>{opt.badge}</span>
+                    {isSelected && (
+                      <span className="text-[#801828] font-bold">Selected ✓</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Referencing & Academic Citation Style Section */}

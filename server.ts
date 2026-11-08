@@ -47,24 +47,26 @@ async function generateContentWithFallback(
   }
 ): Promise<string> {
   // Use gemini-3.1-flash-lite with fallback to gemini-flash-latest
-  const models = ['gemini-3.1-flash-lite', 'gemini-flash-latest'];
+  // Use fast, high-token models with automatic fallback
+  const models = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     for (const model of models) {
       try {
-        console.log(`[AI] Attempt ${attempt} generating report using model: ${model}...`);
+        console.log(`[AI] Attempt ${attempt} generating comprehensive report using model: ${model}...`);
         
         const config: Record<string, unknown> = {
           systemInstruction: params.systemInstruction,
+          maxOutputTokens: 8192,
         };
 
         if (params.responseMimeType) {
           config.responseMimeType = params.responseMimeType;
         }
 
-        // 45-second timeout per model attempt to prevent hanging connections
-        const timeoutMs = 45000;
+        // 85-second timeout per model attempt to allow deep multi-page generation
+        const timeoutMs = 85000;
         const generatePromise = ai.models.generateContent({
           model,
           contents: { parts: params.parts },
@@ -143,6 +145,7 @@ async function startServer() {
         customGuidelineText,
         additionalNotes,
         referencingStyle = 'apa-7',
+        targetLength = 'comprehensive-20-35',
       } = req.body as {
         studentInfo: StudentInfo;
         logbookNotes?: string;
@@ -151,6 +154,7 @@ async function startServer() {
         customGuidelineText?: string;
         additionalNotes?: string;
         referencingStyle?: string;
+        targetLength?: string;
       };
 
       if (!studentInfo || !studentInfo.name || !studentInfo.institution) {
@@ -176,53 +180,56 @@ async function startServer() {
       };
       const activeStyleName = styleNames[referencingStyle] || 'APA 7th Edition';
 
-      const systemInstruction = `You are an expert academic technical writing specialist and engineering evaluator specializing in higher institution Students Industrial Work Experience Scheme (SIWES) technical reports formatted for physical binding and defense submission.
+      const systemInstruction = `You are an expert academic technical writing specialist, university dissertation examiner, and engineering evaluator specializing in higher institution Students Industrial Work Experience Scheme (SIWES) technical reports formatted for physical binding and defense submission.
 
-Your goal is to transform student industrial work experience logbooks and departmental guidelines into an exemplary, highly organized, and defense-ready SIWES Technical Report ready for physical printing, binding, and submission.
+Your goal is to transform student industrial work experience logbooks and departmental guidelines into an exemplary, highly comprehensive, exhaustive, and defense-ready SIWES Technical Report (equivalent to 20 to 50 standard typed academic pages depending on student input).
 
-Guidelines for Report Generation:
-1. VOICE & TONE: Highly formal, technical, objective, and scholarly.
-2. FIDELITY & EXPANSION: Read the student's scanned logbook entries and notes thoroughly. Take brief handwritten or bulleted activities (e.g., "Installed Windows Server", "Ran HPLC assay", "Terminated optical fiber", "Overhauled pump") and expand them with rigorous academic depth—explaining principles of operation, technical methodology, health & safety precautions (HSE), machinery/software specifications, and troubleshooting steps.
-3. REPORT CHAPTER STRUCTURE (Start directly with # DEDICATION, as the institutional Cover Sheet and Supervisor Certification Sheet are compiled automatically by the system):
+CRITICAL DIRECTIVES FOR MAXIMUM ACADEMIC DEPTH & VOLUME:
+1. VOICE, ACADEMIC RIGOR & EXPANSION:
+   - This must be an extensive, highly detailed, scholarly, and publication-ready technical document suitable for physical binding and defense submission.
+   - Do NOT summarize or shorten sections into brief bullet points. Write extensive multi-paragraph technical expositions with rigorous explanations of operating principles, chemical/biological mechanisms, mechanical dynamics, software algorithms, network schematics, mathematical formulations, and engineering standards.
+   - Read the student's logbook notes and attached files thoroughly. Take every recorded activity and expand it into thorough, academic depth—explaining principles of operation, technical methodology, health & safety precautions (HSE), machinery/software specifications, and troubleshooting steps.
+
+2. REPORT CHAPTER STRUCTURE (Start directly with # DEDICATION, as the institutional Cover Sheet and Supervisor Certification Sheet are compiled automatically by the system):
    - # DEDICATION
    - # ACKNOWLEDGEMENTS (Acknowledging University/Polytechnic Directorate, Host Organization, Supervisors, Family)
    - # ABSTRACT / EXECUTIVE SUMMARY (Concise 250-350 word academic summary)
    - # TABLE OF CONTENTS (Structured list of chapters and sub-sections)
    - # CHAPTER ONE: INTRODUCTION & ESTABLISHMENT PROFILE
-     ## 1.1 Background and Objectives of the Industrial Attachment
-     ## 1.2 History & Profile of the Host Establishment (${studentInfo.hostOrg || 'Host Establishment'})
-     ## 1.3 Mission, Vision, and Core Values
-     ## 1.4 Organizational Structure & Organogram Description
-     ## 1.5 Key Operational Units and Functions
+     ## 1.1 Background, Legal Mandate, and Objectives of the Industrial Attachment (Citing ITF Act and institutional mandates)
+     ## 1.2 History, Scale & Profile of the Host Establishment (${studentInfo.hostOrg || 'Host Establishment'})
+     ## 1.3 Mission, Vision, Quality Policies, and Core Corporate Values
+     ## 1.4 Organizational Structure & Comprehensive Organogram Description
+     ## 1.5 Key Operational Units, Functional Departments, and Interrelationships
    - # CHAPTER TWO: INDUSTRIAL SAFETY, TOOLS, EQUIPMENT & WORK ENVIRONMENT
-     ## 2.1 Industrial Safety & Health (HSE) Regulations
-     ## 2.2 Personal Protective Equipment (PPE) & Incident Management
-     ## 2.3 Major Tools, Machinery, Hardware, and Software Utilized
+     ## 2.1 Industrial Safety Framework & Health (HSE) Regulations
+     ## 2.2 Hazard Identification, Risk Assessment (HIRA) & Personal Protective Equipment (PPE)
+     ## 2.3 Comprehensive Catalog of Major Machinery, Instruments, Hardware, and Software Utilized (Detailed working principles, manufacturer specifications, calibration, and operational parameters)
    - # CHAPTER THREE: INDUSTRIAL EXPERIENCE & DETAILED TECHNICAL ACTIVITIES
-     ## 3.1 Overview of Departmental Deployment (${studentInfo.unit || 'Assigned Unit'})
-     ## 3.2 Weekly Activity Matrix (A clean Markdown Table summarizing weeks, units, core tasks, and technologies)
-     ## 3.3 Detailed Technical Projects & Case Studies (Deep-dive breakdown of major tasks completed from the logbook, with step-by-step methodologies and practical engineering/scientific principles)
-     ## 3.4 Technical Diagrams / Flowchart Descriptions (Include [Figure 3.1: ...], [Figure 3.2: ...] illustrating the workflows)
+     ## 3.1 Overview of Departmental Deployment & Rotations (${studentInfo.unit || 'Assigned Unit'})
+     ## 3.2 Comprehensive Weekly Activity Matrix (An exhaustive Markdown Table covering the weekly progression with Week, Unit/Area, Specific Tasks, Machinery/Tools/Software Utilized, and Engineering Principles Applied)
+     ## 3.3 Major Technical Projects & Case Studies (Deep-dive, step-by-step breakdown of at least 3-5 distinct major projects or tasks completed, detailing background, theoretical principles, step-by-step methodology, apparatus/software, observations, safety precautions, and diagnostic/testing results)
+     ## 3.4 Technical Workflows, Schematics, and Flowchart Descriptions (Include [Figure 3.1: ...], [Figure 3.2: ...] with descriptive architectural/process breakdowns)
    - # CHAPTER FOUR: SUMMARY OF INDUSTRIAL TRAINING (IT) EXPERIENCE, CHALLENGES AND SOLUTIONS
-     ## 4.1 Summary of Industrial Training Experience (Comprehensive overview and synthesis of the entire attachment period, department deployments, technologies handled, and core professional competencies gained)
-     ## 4.2 Industrial and Operational Challenges Encountered (Technical, organizational, environmental, and infrastructural challenges faced during the placement)
-     ## 4.3 Practical Troubleshooting and Solutions Proffered (Direct engineering, scientific, and procedural solutions applied to overcome each challenge)
-     ## 4.4 Lessons Learned and Professional Growth (Skills mastered, ethical standards observed, and readiness for industrial practice)
+     ## 4.1 Summary of Industrial Training Experience (An extensive, comprehensive synthesis of the student's entire industrial attachment, work culture, multi-unit rotations, core competencies mastered, and direct operational contributions made to ${studentInfo.hostOrg || 'the establishment'} before challenges and solutions)
+     ## 4.2 Industrial, Technical, and Operational Challenges Encountered (Detailed analysis of operational bottlenecks, hardware/software incompatibilities, system breakdowns, environmental/safety hazards, and resource limitations)
+     ## 4.3 Practical Troubleshooting and Solutions Proffered (Direct engineering, scientific, and systematic methodologies deployed to troubleshoot and resolve each challenge)
+     ## 4.4 Technical Competencies Acquired, Professional Ethics & Personal Growth (Synthesis of soft skills, professional engineering ethics, safety culture, and industry readiness)
    - # CHAPTER FIVE: CONCLUSION, RECOMMENDATIONS & IMPACT
-     ## 5.1 Conclusion (Synthesis of industrial attachment value)
+     ## 5.1 Conclusion (Comprehensive synthesis of industrial attachment outcomes and professional maturation)
      ## 5.2 Recommendations to the Academic Institution
      ## 5.3 Recommendations to the Host Establishment
-     ## 5.4 Advice to Prospective Students
+     ## 5.4 Strategic Advice to Prospective SIWES Students
    - # REFERENCES (Authentic scholarly textbooks, engineering manuals, peer-reviewed journals, and statutory guidelines formatted strictly in ${activeStyleName})
    - # APPENDIX (Form verification reference, logbook entry notes)
 
-4. SCHOLARLY CITATIONS & REFERENCES (${activeStyleName}):
-   - Include genuine, peer-reviewed academic textbooks, authoritative industry manuals, and recognized journals specific to the student's field (${studentInfo.department || 'the discipline'}).
+3. SCHOLARLY CITATIONS & REFERENCES (${activeStyleName}):
+   - Include genuine, peer-reviewed academic textbooks, authoritative industry manuals, published conference abstracts, and recognized journals specific to the student's field (${studentInfo.department || 'the discipline'}).
    - For engineering/computing/sciences, cite recognized standard literature (e.g., Sommerville, Silberschatz, Pressman for Computing; Shigley/Budynas, Theraja, Boylestad for Engineering; Lehninger, Cheesbrough for Sciences; and official Industrial Training Fund [ITF] guidelines).
-   - Place in-text citations naturally in Chapters 1, 2, and 3.
-   - In the # REFERENCES section, list at least 6-8 complete, academically authentic references strictly formatted in ${activeStyleName}.
+   - Integrate in-text citations naturally in Chapters 1, 2, and 3 (e.g., citing authors/year for methodologies, standard procedures, and technical principles).
+   - In the # REFERENCES section, list at least 8-12 complete, academically authentic references strictly formatted in ${activeStyleName}.
 
-5. PRESENTATION DISCIPLINE (PLAIN FORMATTING):
+4. PRESENTATION DISCIPLINE (PLAIN FORMATTING):
    - Do NOT output any duplicate cover page, student name headers, or signature lines at the beginning. Start immediately with # DEDICATION.
    - The report must be completely plain and formal. Do not include any decorative designs, HTML styling, font colors, emojis, badges, or callout blocks.
    - Always use standard markdown headers (# for Chapter titles, ## for Sections, ### for Sub-sections), plain standard markdown tables (| Header 1 | Header 2 |), plain paragraphs, and numbered or bulleted lists.
@@ -266,6 +273,7 @@ STUDENT & ATTACHMENT PROFILE:
 
 SELECTED TECHNICAL REPORT FORMAT & CITATION STYLE:
 - Format Standard: ${formatGuideline || 'Universal 5-Chapter Technical Report Standard'}
+- Target Depth / Volume: ${targetLength} (Generate maximum academic depth, detailed multi-week activity matrix, and at least 3-5 comprehensive technical case studies equivalent to 20-50 pages)
 - Referencing Style: ${activeStyleName} (Generate authentic discipline-specific books and journals with in-text citations)
 - Chapter 4 Requirement: You MUST include Section 4.1 "Summary of Industrial Training Experience" before Section 4.2 "Industrial and Operational Challenges Encountered".
 ${customGuidelineText ? `CUSTOM DEPARTMENTAL INSTRUCTIONS:\n${customGuidelineText}\n` : ''}
@@ -275,7 +283,7 @@ STUDENT LOGBOOK NOTES & TRANSCRIPT:
 ${logbookNotes && logbookNotes.trim().length > 0 ? logbookNotes : 'Please inspect the attached scanned logbook PDF document or page photos directly and extract all recorded activities, dates, equipment, and remarks.'}
 
 TASK:
-Analyze all the scanned logbook PDF documents, page images, and notes provided above. Read through each week of activities in the scanned logbook. Synthesize every activity into a complete, comprehensive, and defense-ready SIWES Technical Report according to the required 5-chapter structure. Ensure it is ready for physical printing and submission. Return the report in full markdown format.`;
+Analyze all the scanned logbook PDF documents, page images, and notes provided above. Read through each week of activities in the scanned logbook. Synthesize every activity into an exhaustive, highly detailed, and defense-ready SIWES Technical Report according to the required 5-chapter structure. Ensure it is ready for physical printing and submission. Return the report in full markdown format.`;
 
       parts.push({ text: promptText });
 
@@ -295,6 +303,91 @@ Analyze all the scanned logbook PDF documents, page images, and notes provided a
     } catch (err: unknown) {
       console.error('Error generating SIWES report:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate SIWES report';
+      return res.status(200).json({
+        success: false,
+        error: errorMessage,
+      });
+    }
+  });
+
+  // Expand / Deepen a specific report section to reach 20-50 pages
+  app.post('/api/expand-chapter', async (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(200).json({
+          success: false,
+          error: 'GEMINI_API_KEY is not configured on the server.',
+        });
+      }
+
+      const {
+        fullReportMarkdown,
+        chapterKey,
+        studentInfo,
+        referencingStyle = 'apa-7',
+      } = req.body as {
+        fullReportMarkdown: string;
+        chapterKey: string;
+        studentInfo: StudentInfo;
+        referencingStyle?: string;
+      };
+
+      if (!fullReportMarkdown || fullReportMarkdown.trim().length < 50) {
+        return res.status(200).json({
+          success: false,
+          error: 'Valid report content is required for expansion.',
+        });
+      }
+
+      const styleNames: Record<string, string> = {
+        'apa-7': 'APA 7th Edition',
+        'ieee': 'IEEE Style',
+        'harvard': 'Harvard Style',
+        'mla': 'MLA 9th Edition',
+        'vancouver': 'Vancouver Style',
+      };
+      const activeStyleName = styleNames[referencingStyle] || 'APA 7th Edition';
+
+      const systemInstruction = `You are an expert academic technical writing specialist and university dissertation supervisor.
+Your task is to take an existing SIWES technical report and substantially expand its technical depth, analytical density, and academic volume to reach an exhaustive 20-50 page monograph standard.
+
+Focus on expanding:
+1. CHAPTER THREE: Add 2-3 additional deep-dive engineering/scientific case studies, full operational procedures, detailed testing parameters, and equipment specifications.
+2. CHAPTER FOUR: Ensure Section 4.1 "Summary of Industrial Training Experience" provides an extensive synthesis of the entire attachment period before Section 4.2 Challenges and 4.3 Solutions.
+3. REFERENCES: Ensure at least 10-12 authentic discipline-specific books, peer-reviewed journals, and standards in ${activeStyleName} with corresponding in-text citations.
+
+Return the complete, expanded report in markdown. Keep all existing chapters, enhance their depth, and output the entire expanded report.`;
+
+      const promptText = `
+STUDENT PROFILE:
+- Name: ${studentInfo.name}
+- Department: ${studentInfo.department}
+- Host Organization: ${studentInfo.hostOrg}
+- Unit: ${studentInfo.unit}
+
+CURRENT TECHNICAL REPORT (To expand into 20-50 page academic volume):
+${fullReportMarkdown}
+
+TASK:
+Substantially expand and deepen this report. Add technical case studies, expand the weekly matrix with deep technical commentary, ensure Chapter 4 Section 4.1 "Summary of Industrial Training Experience" is rich and detailed, and expand scholarly references formatted in ${activeStyleName}. Return the full expanded report in clean markdown.`;
+
+      const expandedMarkdown = await generateContentWithFallback(ai, {
+        systemInstruction,
+        parts: [{ text: promptText }],
+      });
+
+      const wordCount = expandedMarkdown.split(/\s+/).filter(Boolean).length;
+
+      return res.json({
+        success: true,
+        reportMarkdown: expandedMarkdown,
+        wordCount,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err: unknown) {
+      console.error('Error expanding chapter:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to expand report section';
       return res.status(200).json({
         success: false,
         error: errorMessage,

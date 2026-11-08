@@ -12,7 +12,7 @@ import { FormatSelector } from './components/FormatSelector';
 import { ReportViewer } from './components/ReportViewer';
 import { PreDefenseReviewModal } from './components/PreDefenseReviewModal';
 import { GuidelinesModal } from './components/GuidelinesModal';
-import { StudentInfo, UploadedImage, SampleDataset, TechnicalReviewData, ReferencingStyle } from './types/siwes';
+import { StudentInfo, UploadedImage, SampleDataset, TechnicalReviewData, ReferencingStyle, ReportDepth } from './types/siwes';
 
 const DEFAULT_STUDENT_INFO: StudentInfo = {
   name: '',
@@ -102,6 +102,7 @@ export default function App() {
   const [customGuidelineText, setCustomGuidelineText] = useState<string>('');
   const [additionalNotes, setAdditionalNotes] = useState<string>('');
   const [referencingStyle, setReferencingStyle] = useState<ReferencingStyle>('apa-7');
+  const [reportDepth, setReportDepth] = useState<ReportDepth>('comprehensive-20-35');
   
   // App views & modals
   const [viewMode, setViewMode] = useState<'form' | 'report'>('form');
@@ -217,6 +218,7 @@ export default function App() {
           customGuidelineText,
           additionalNotes,
           referencingStyle,
+          targetLength: reportDepth,
         }),
       });
 
@@ -389,6 +391,8 @@ export default function App() {
               onAdditionalNotesChange={setAdditionalNotes}
               referencingStyle={referencingStyle}
               onReferencingStyleChange={setReferencingStyle}
+              reportDepth={reportDepth}
+              onReportDepthChange={setReportDepth}
               studentDepartment={studentInfo.department}
               studentFaculty={studentInfo.faculty}
             />

@@ -116,6 +116,9 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
   const [copiedCitationId, setCopiedCitationId] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
 
+  const [isExpanding, setIsExpanding] = useState(false);
+  const [expandMessage, setExpandMessage] = useState<string | null>(null);
+
   // Sync activeStyle with prop
   React.useEffect(() => {
     if (referencingStyle) setActiveStyle(referencingStyle);
@@ -150,6 +153,68 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
     setTimeout(() => setCopiedCitationId(null), 2000);
   };
 
+  // Apply formatted bibliography to report references section
+  const handleApplyReferencesToReport = () => {
+    const textToInsert = recommendedCitations.map((c) => c.formatted).join('\n\n');
+    const current = editableText || reportMarkdown;
+    let updated = current;
+    if (/(?:#+\s*)?REFERENCES\b/i.test(current)) {
+      updated = current.replace(
+        /(#+\s*REFERENCES[\s\S]*?)(?=(?:#+\s*APPENDIX|\n\n#|$))/i,
+        `# REFERENCES\n\n${textToInsert}\n\n`
+      );
+    } else {
+      updated = `${current}\n\n# REFERENCES\n\n${textToInsert}\n`;
+    }
+    setEditableText(updated);
+    onUpdateMarkdown(updated);
+    setIsCopiedBibliography(true);
+    setTimeout(() => setIsCopiedBibliography(false), 2000);
+  };
+
+  // Progressive deep expansion of report to 20-50 pages
+  const handleExpandReport = async () => {
+    setIsExpanding(true);
+    setExpandMessage('Deepening industrial case studies, expanding Chapter 4 synthesis, and adding citations...');
+    try {
+      const response = await fetch('/api/expand-chapter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullReportMarkdown: editableText || reportMarkdown,
+          studentInfo,
+          referencingStyle: activeStyle,
+        }),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response while expanding report.');
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to expand report volume.');
+      }
+
+      if (data.reportMarkdown) {
+        setEditableText(data.reportMarkdown);
+        onUpdateMarkdown(data.reportMarkdown);
+        setExpandMessage('Report expanded successfully with deeper case studies & references!');
+        setTimeout(() => setExpandMessage(null), 4000);
+      }
+    } catch (err: unknown) {
+      console.error('Error expanding report:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to expand report.';
+      alert(msg);
+      setExpandMessage(null);
+    } finally {
+      setIsExpanding(false);
+    }
+  };
+
   // Sync editable text when parent reportMarkdown updates
   React.useEffect(() => {
     setEditableText(reportMarkdown);
@@ -159,6 +224,16 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
   const chapterSections = useMemo(() => {
     return splitMarkdownIntoSections(editableText || reportMarkdown);
   }, [editableText, reportMarkdown]);
+
+  const currentWordCount = useMemo(() => {
+    const text = editableText || reportMarkdown || '';
+    return text.split(/\s+/).filter(Boolean).length;
+  }, [editableText, reportMarkdown]);
+
+  // Realistic academic page count (12pt Times New Roman, 1.5 line spacing ~310 wpp + title/cert + chapter breaks)
+  const estimatedPages = useMemo(() => {
+    return Math.max(18, Math.ceil(currentWordCount / 310) + chapterSections.length + 2);
+  }, [currentWordCount, chapterSections.length]);
 
   // Convert markdown to HTML safely using marked
   const renderedHtml = useMemo(() => {
@@ -343,16 +418,39 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
 
           <div className="h-4 w-px bg-gray-200 hidden sm:block"></div>
 
-          <div className="text-xs text-gray-500 font-medium hidden sm:inline-block">
-            Report size:{' '}
-            <span className="font-semibold text-gray-800">
-              {wordCount || reportMarkdown.split(/\s+/).filter(Boolean).length} words
+          <div className="flex items-center space-x-2 text-xs">
+            <span className="font-bold text-[#801828] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+              ~{estimatedPages} Academic Pages
+            </span>
+            <span className="text-gray-500 hidden md:inline">
+              ({currentWordCount.toLocaleString()} words)
             </span>
           </div>
         </div>
 
         {/* Action Buttons for Physical Submission & Review */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Expand to 35-50 Pages Button */}
+          <button
+            type="button"
+            disabled={isExpanding}
+            onClick={handleExpandReport}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-bold rounded-lg shadow-2xs transition disabled:opacity-60"
+            title="Deepen technical case studies and expand report volume up to 50 pages"
+          >
+            {isExpanding ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-200" />
+                <span>Expanding Volume...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                <span>Expand to 35–50 Pages</span>
+              </>
+            )}
+          </button>
+
           {/* Citations & Bibliography Manager */}
           <button
             type="button"
@@ -457,6 +555,14 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Expand Progress or Success Banner */}
+      {expandMessage && (
+        <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-center space-x-2.5 shadow-2xs no-print">
+          <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
+          <span className="font-medium">{expandMessage}</span>
+        </div>
+      )}
 
       {/* Anti-Scattering Submission Formatting Notice */}
       <div className="p-3.5 bg-rose-50/70 border border-rose-200/80 rounded-xl no-print flex items-center justify-between text-xs">
@@ -656,6 +762,178 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Citations & Bibliography Manager Modal */}
+      {isCitationsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 no-print animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50 via-white to-rose-50/30 border-b border-rose-100 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#801828] text-white flex items-center justify-center shadow-xs">
+                  <BookOpen className="w-5 h-5 text-rose-100" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-bold text-base sm:text-lg text-gray-900 leading-tight">
+                    Citations & Academic Bibliography Manager
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Peer-reviewed literature, textbooks, and standards cited in your report for{' '}
+                    <strong className="text-gray-700">{studentInfo.department || 'Technical Field'}</strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCitationsModalOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
+              {/* Style Switcher Tabs */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                  Select Citation & Referencing Standard
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {REFERENCING_STYLES.map((style) => {
+                    const isSelected = activeStyle === style.id;
+                    return (
+                      <button
+                        type="button"
+                        key={style.id}
+                        onClick={() => handleSelectCitationStyle(style.id)}
+                        className={`p-2.5 rounded-lg border text-left transition flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-[#801828] bg-rose-50/70 text-[#6B1522] ring-1 ring-[#801828] shadow-2xs font-semibold'
+                            : 'border-gray-200 hover:border-rose-200 bg-white text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold">{style.shortName}</span>
+                          {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-[#801828]"></span>}
+                        </div>
+                        <span className="text-[10px] text-gray-500 mt-1 line-clamp-1">
+                          {style.id === 'apa-7' ? 'APA Standard' : style.id === 'ieee' ? 'Numbered [1]' : style.id === 'harvard' ? 'Author-Date' : style.id === 'vancouver' ? 'Numeric' : 'Author-Page'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* In-Text Citation Guidance Box */}
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-gray-800">
+                    Active Style Guide: {REFERENCING_STYLES.find(s => s.id === activeStyle)?.name}
+                  </span>
+                  <span className="font-mono text-[10px] text-[#801828] bg-rose-50 px-2 py-0.5 rounded border border-rose-200 uppercase font-bold">
+                    {activeStyle}
+                  </span>
+                </div>
+                <p className="text-gray-600 text-[11px] leading-relaxed">
+                  {REFERENCING_STYLES.find(s => s.id === activeStyle)?.description}
+                </p>
+                <div className="mt-2 pt-2 border-t border-gray-200 text-[11px] font-mono text-gray-700 bg-white p-2 rounded border border-gray-200">
+                  {REFERENCING_STYLES.find(s => s.id === activeStyle)?.example}
+                </div>
+              </div>
+
+              {/* Cited Discipline References List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                    Recommended Literature & Statutory Guidelines ({recommendedCitations.length})
+                  </span>
+                  <span className="text-[11px] text-gray-500">
+                    Cited in Chapters 1, 2, 3, 4 & References
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {recommendedCitations.map((item, idx) => (
+                    <div
+                      key={item.citation.id || idx}
+                      className="p-3 bg-white rounded-xl border border-gray-200 hover:border-rose-200 transition space-y-1.5 shadow-2xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-mono text-gray-800 leading-relaxed select-all">
+                          {item.formatted}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopySingleCitation(item.citation.id || String(idx), item.formatted)}
+                          className="shrink-0 p-1.5 text-gray-500 hover:text-[#801828] hover:bg-rose-50 rounded-md transition text-[11px] flex items-center space-x-1"
+                          title="Copy citation"
+                        >
+                          {copiedCitationId === (item.citation.id || String(idx)) ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="text-emerald-600 text-[10px] font-semibold">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span className="text-[10px]">Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100 text-[10px]">
+                        <span className="bg-rose-50 text-[#801828] px-1.5 py-0.5 rounded font-mono font-semibold">
+                          In-Text: {item.inText}
+                        </span>
+                        <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded capitalize">
+                          {item.citation.journalOrBook}
+                        </span>
+                        {item.citation.publisher && (
+                          <span className="text-gray-400">
+                            Publisher: {item.citation.publisher}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              <div className="text-[11px] text-gray-500">
+                You can apply the updated literature directly into the report or copy it to your clipboard.
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleCopyAllBibliography}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg border border-gray-300 transition"
+                >
+                  {isCopiedBibliography ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{isCopiedBibliography ? 'Copied All Citations!' : 'Copy Full Bibliography'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleApplyReferencesToReport}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center space-x-1.5 px-3.5 py-1.5 bg-[#801828] hover:bg-[#6B1522] text-white text-xs font-bold rounded-lg shadow-xs transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-rose-200" />
+                  <span>Update Report References</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

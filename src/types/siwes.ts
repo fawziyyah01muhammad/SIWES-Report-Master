@@ -135,3 +135,37 @@ export const STANDARD_FORMATS = [
     outline: 'AI strictly mirrors the custom chapter arrangement provided by your departmental committee.',
   },
 ];
+
+export type ReportDepth = 'comprehensive-20-35' | 'exhaustive-35-50' | 'standard-15-20';
+
+export interface ReportDepthOption {
+  id: ReportDepth;
+  name: string;
+  targetPages: string;
+  description: string;
+  badge: string;
+}
+
+export const REPORT_DEPTH_OPTIONS: ReportDepthOption[] = [
+  {
+    id: 'comprehensive-20-35',
+    name: 'Comprehensive Defense Monograph',
+    targetPages: '20 – 35 Pages',
+    description: 'Detailed multi-week activity matrix, 3-4 major engineering/scientific case studies, HSE protocols, and extensive academic literature citations.',
+    badge: 'Standard Defense (20–35 Pages)',
+  },
+  {
+    id: 'exhaustive-35-50',
+    name: 'Exhaustive Academic Technical Report',
+    targetPages: '35 – 50 Pages',
+    description: 'Maximum depth dissertation-grade volume with multi-department rotations, full mathematical/algorithmic breakdowns, diagnostic tables, and 12-15+ cited references.',
+    badge: 'Max Depth (35–50 Pages)',
+  },
+  {
+    id: 'standard-15-20',
+    name: 'Standard Technical Report',
+    targetPages: '15 – 20 Pages',
+    description: 'Standard 5-chapter institutional format with concise weekly breakdown and core literature citations.',
+    badge: 'Concise (15–20 Pages)',
+  },
+];

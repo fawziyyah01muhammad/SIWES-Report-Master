@@ -371,12 +371,29 @@ export function formatCitation(item: AcademicCitation, style: ReferencingStyle, 
   }
 }
 
+// Helper to generate in-text citation format based on style
+export function formatInTextCitation(item: AcademicCitation, style: ReferencingStyle, index: number = 1): string {
+  const firstAuthorLastName = item.authors.split(',')[0].replace(/\[.*?\]/, '').trim();
+  switch (style) {
+    case 'ieee':
+      return `[${index}]`;
+    case 'vancouver':
+      return `(${index})`;
+    case 'mla':
+      return `(${firstAuthorLastName})`;
+    case 'harvard':
+    case 'apa-7':
+    default:
+      return `(${firstAuthorLastName}, ${item.year})`;
+  }
+}
+
 // Automatically match the student's department or course to relevant categories
 export function getRecommendedReferencesForStudent(
   department: string = '',
   faculty: string = '',
   style: ReferencingStyle = 'apa-7'
-): { citation: AcademicCitation; formatted: string }[] {
+): { citation: AcademicCitation; formatted: string; inText: string }[] {
   const query = `${department} ${faculty}`.toLowerCase();
 
   let matchedCategory: 'cs-it' | 'engineering' | 'electrical' | 'biochem-lab' | 'civil' = 'cs-it';
@@ -401,5 +418,6 @@ export function getRecommendedReferencesForStudent(
   return filtered.map((citation, idx) => ({
     citation,
     formatted: formatCitation(citation, style, idx + 1),
+    inText: formatInTextCitation(citation, style, idx + 1),
   }));
 }
