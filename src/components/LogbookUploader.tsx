@@ -140,6 +140,8 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
     }
   };
 
+
+
   const handleRemoveFile = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     onImagesChange(images.filter((img) => img.id !== id));
@@ -270,10 +272,10 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
 
                 <div>
                   <h4 className="text-sm font-bold text-gray-800">
-                    {isProcessingFiles ? 'Processing Scanned Logbook...' : 'Upload Scanned Logbook (PDF or Photos)'}
+                    {isProcessingFiles ? 'Processing Uploaded Files...' : 'Upload Scanned Logbook (PDF or Page Photos)'}
                   </h4>
                   <p className="text-xs text-gray-500 max-w-md mx-auto mt-0.5">
-                    Upload your multi-page scanned logbook PDF document, or snap/select photos of your weekly pages.
+                    Upload your scanned SIWES logbook as a PDF document or individual photos of logbook pages for week-by-week technical analysis.
                   </p>
                 </div>
 
@@ -287,7 +289,18 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
                     className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-[#801828] hover:bg-[#6B1522] text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50"
                   >
                     <FileText className="w-4 h-4 text-rose-200" />
-                    <span>Upload Scanned PDF Logbook</span>
+                    <span>Upload PDF Logbook</span>
+                  </button>
+
+                  {/* Scanned Logbook Pages Button */}
+                  <button
+                    type="button"
+                    disabled={isProcessingFiles}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-[#6B1522] text-xs font-bold rounded-lg border border-rose-300 shadow-2xs transition disabled:opacity-50"
+                  >
+                    <Upload className="w-4 h-4 text-[#801828]" />
+                    <span>Upload Logbook Pages</span>
                   </button>
 
                   {/* Camera Snap for Mobile */}
@@ -295,28 +308,17 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
                     type="button"
                     disabled={isProcessingFiles}
                     onClick={() => cameraInputRef.current?.click()}
-                    className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg border border-gray-300 shadow-xs transition disabled:opacity-50"
+                    className="inline-flex items-center space-x-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg border border-gray-300 shadow-xs transition disabled:opacity-50"
                   >
                     <Camera className="w-4 h-4 text-[#801828]" />
-                    <span>Take Photo (Camera)</span>
-                  </button>
-
-                  {/* Browse Gallery / All Files */}
-                  <button
-                    type="button"
-                    disabled={isProcessingFiles}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-lg border border-gray-300 shadow-xs transition disabled:opacity-50"
-                  >
-                    <Upload className="w-4 h-4 text-[#801828]" />
-                    <span>Browse All Files</span>
+                    <span>Snap Logbook Page</span>
                   </button>
                 </div>
 
                 <div className="flex items-center space-x-1.5 text-[11px] text-gray-500 pt-1">
-                  <span className="font-semibold text-[#801828]">PDF Documents</span>
+                  <span className="font-semibold text-[#801828]">PDF Logbooks</span>
                   <span>•</span>
-                  <span>JPG, PNG, WEBP</span>
+                  <span className="font-semibold text-rose-800">Scanned Page Photos</span>
                   <span>•</span>
                   <span>Multi-page files supported</span>
                 </div>
@@ -325,8 +327,8 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
 
             {/* Uploaded Gallery (PDFs and Photos) */}
             {images.length > 0 && (
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-2">
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
                   <h5 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                     Uploaded Files ({images.length})
                   </h5>
@@ -346,55 +348,57 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
                     return (
                       <div
                         key={file.id}
-                        onClick={() => setPreviewFile(file)}
-                        className={`group relative border rounded-xl overflow-hidden cursor-pointer transition shadow-xs flex items-center p-3 gap-3 ${
+                        className={`group relative border rounded-xl overflow-hidden transition shadow-2xs flex flex-col p-3 ${
                           isPdf
-                            ? 'bg-rose-50/50 border-rose-300 hover:border-[#801828]'
+                            ? 'bg-rose-50/40 border-rose-300 hover:border-[#801828]'
                             : 'bg-gray-50 border-gray-200 hover:border-[#801828]'
                         }`}
                       >
-                        {/* Thumbnail Icon / Image */}
-                        <div className="w-14 h-16 rounded-lg overflow-hidden shrink-0 bg-white border border-gray-200 flex items-center justify-center relative">
-                          {isPdf ? (
-                            <div className="flex flex-col items-center justify-center text-[#801828]">
-                              <FileText className="w-7 h-7" />
-                              <span className="text-[9px] font-extrabold uppercase mt-0.5 tracking-tight bg-[#801828] text-white px-1 rounded">
-                                PDF
-                              </span>
-                            </div>
-                          ) : (
-                            <img
-                              src={file.previewUrl}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
+                        <div
+                          onClick={() => setPreviewFile(file)}
+                          className="flex items-start gap-3 cursor-pointer"
+                        >
+                          {/* Thumbnail Icon / Image */}
+                          <div className="w-14 h-16 rounded-lg overflow-hidden shrink-0 bg-white border border-gray-200 flex items-center justify-center relative">
+                            {isPdf ? (
+                              <div className="flex flex-col items-center justify-center text-[#801828]">
+                                <FileText className="w-7 h-7" />
+                                <span className="text-[9px] font-extrabold uppercase mt-0.5 tracking-tight bg-[#801828] text-white px-1 rounded">
+                                  PDF
+                                </span>
+                              </div>
+                            ) : (
+                              <img
+                                src={file.previewUrl}
+                                alt={file.name}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                          </div>
 
-                        {/* File Details */}
-                        <div className="flex-1 min-w-0 pr-6">
-                          <div className="flex items-center space-x-1">
+                          {/* File Details */}
+                          <div className="flex-1 min-w-0 pr-6">
                             <span className="text-xs font-bold text-gray-900 truncate block">
                               {file.name}
                             </span>
-                          </div>
-                          
-                          <div className="flex items-center space-x-2 mt-1">
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                              isPdf
-                                ? 'bg-[#801828] text-white'
-                                : 'bg-gray-200 text-gray-700'
-                            }`}>
-                              {isPdf ? 'PDF Logbook' : `Scan ${idx + 1}`}
-                            </span>
-                            <span className="text-[11px] text-gray-500 font-mono">
-                              {formatFileSize(file.size)}
-                            </span>
-                          </div>
+                            
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                isPdf
+                                  ? 'bg-[#801828] text-white'
+                                  : 'bg-gray-200 text-gray-700'
+                              }`}>
+                                {isPdf ? 'PDF Logbook' : `Logbook Page ${idx + 1}`}
+                              </span>
+                              <span className="text-[10px] text-gray-500 font-mono">
+                                {formatFileSize(file.size)}
+                              </span>
+                            </div>
 
-                          <div className="text-[10px] text-gray-400 mt-1 flex items-center space-x-1 group-hover:text-[#801828]">
-                            <Eye className="w-3 h-3" />
-                            <span>Click to preview</span>
+                            <div className="text-[10px] text-gray-400 mt-1 flex items-center space-x-1 group-hover:text-[#801828]">
+                              <Eye className="w-3 h-3" />
+                              <span>Click to preview</span>
+                            </div>
                           </div>
                         </div>
 
@@ -402,7 +406,7 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
                         <button
                           type="button"
                           onClick={(e) => handleRemoveFile(file.id, e)}
-                          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white hover:bg-rose-100 text-gray-500 hover:text-rose-700 border border-gray-200 flex items-center justify-center transition shadow-2xs"
+                          className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white hover:bg-rose-100 text-gray-500 hover:text-rose-700 border border-gray-200 flex items-center justify-center transition shadow-2xs"
                           title="Remove file"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -472,7 +476,7 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
         )}
       </div>
 
-      {/* File Preview Modal (Supports both PDF and Images) */}
+      {/* File Preview Modal (Supports PDF and Images with Caption Editing) */}
       {previewFile && (
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3 sm:p-5 backdrop-blur-xs"
@@ -517,7 +521,7 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
               </div>
             </div>
 
-            <div className="p-2 overflow-auto flex items-center justify-center bg-gray-900 min-h-[400px] h-[75vh]">
+            <div className="p-2 overflow-auto flex items-center justify-center bg-gray-900 min-h-[350px] h-[65vh]">
               {previewFile.mimeType === 'application/pdf' ? (
                 <iframe
                   src={previewFile.previewUrl}
@@ -538,3 +542,4 @@ export const LogbookUploader: React.FC<LogbookUploaderProps> = ({
     </div>
   );
 };
+

@@ -230,9 +230,9 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
     return text.split(/\s+/).filter(Boolean).length;
   }, [editableText, reportMarkdown]);
 
-  // Realistic academic page count (12pt Times New Roman, 1.5 line spacing ~310 wpp + title/cert + chapter breaks)
+  // Realistic academic page count (12pt Times New Roman, 1.5 line spacing ~295 wpp + title/cert + chapter breaks)
   const estimatedPages = useMemo(() => {
-    return Math.max(18, Math.ceil(currentWordCount / 310) + chapterSections.length + 2);
+    return Math.max(1, Math.ceil(currentWordCount / 295) + chapterSections.length + 2);
   }, [currentWordCount, chapterSections.length]);
 
   // Convert markdown to HTML safely using marked

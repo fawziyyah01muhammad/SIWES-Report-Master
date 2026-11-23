@@ -3,7 +3,8 @@ import type { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { getRecommendedReferencesForStudent, ReferencingStyle } from './src/utils/referenceCatalog.ts';
 
 dotenv.config();
 
@@ -34,7 +35,6 @@ interface ImageUpload {
   mimeType: string;
   base64: string;
   pageNumber?: number;
-  caption?: string;
 }
 
 // Multi-model generator with automatic retry to prevent timeouts
@@ -44,22 +44,25 @@ async function generateContentWithFallback(
     systemInstruction: string;
     parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
     responseMimeType?: string;
+    label?: string;
   }
 ): Promise<string> {
-  // Use gemini-3.1-flash-lite with fallback to gemini-flash-latest
-  // Use fast, high-token models with automatic fallback
-  const models = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+  const models = ['gemini-4-hydrogen', 'gemini-3.1-flash-lite'];
   let lastError: Error | null = null;
+  const tag = params.label ? `[AI:${params.label}]` : '[AI]';
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     for (const model of models) {
       try {
-        console.log(`[AI] Attempt ${attempt} generating comprehensive report using model: ${model}...`);
-        
+        console.log(`${tag} Attempt ${attempt} generating content using model: ${model}...`);
+
         const config: Record<string, unknown> = {
           systemInstruction: params.systemInstruction,
-          maxOutputTokens: 8192,
         };
+
+        if (model === 'gemini-4-hydrogen') {
+          config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+        }
 
         if (params.responseMimeType) {
           config.responseMimeType = params.responseMimeType;
@@ -84,13 +87,12 @@ async function generateContentWithFallback(
         const text = response?.text;
 
         if (text && text.trim().length > 0) {
-          console.log(`[AI] Successfully generated content with ${model} on attempt ${attempt} (${text.length} chars)`);
+          console.log(`${tag} Successfully generated content with ${model} on attempt ${attempt} (${text.length} chars)`);
           return text;
         }
       } catch (err: unknown) {
-        console.warn(`[AI] Model ${model} attempt ${attempt} failed:`, err instanceof Error ? err.message : err);
+        console.warn(`${tag} Model ${model} attempt ${attempt} failed:`, err instanceof Error ? err.message : err);
         lastError = err instanceof Error ? err : new Error(String(err));
-        // Small pause before second attempt
         if (attempt < 2) {
           await new Promise((r) => setTimeout(r, 1200));
         }
@@ -130,133 +132,133 @@ apiRouter.get('/health', (_req: Request, res: Response) => {
 
 // Generate SIWES Technical Report
 apiRouter.post('/generate-siwes-report', async (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'application/json');
-    try {
-      if (!process.env.GEMINI_API_KEY) {
-        return res.status(200).json({
-          success: false,
-          error: 'GEMINI_API_KEY is not configured on the server. Please check Settings > Secrets.',
-        });
-      }
+  res.setHeader('Content-Type', 'application/json');
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(200).json({
+        success: false,
+        error: 'GEMINI_API_KEY is not configured on the server. Please check Settings > Secrets.',
+      });
+    }
 
-      const {
-        studentInfo,
-        logbookNotes,
-        logbookImages = [],
-        formatGuideline,
-        customGuidelineText,
-        additionalNotes,
-        referencingStyle = 'apa-7',
-        targetLength = 'comprehensive-20-35',
-      } = req.body as {
-        studentInfo: StudentInfo;
-        logbookNotes?: string;
-        logbookImages?: ImageUpload[];
-        formatGuideline?: string;
-        customGuidelineText?: string;
-        additionalNotes?: string;
-        referencingStyle?: string;
-        targetLength?: string;
-      };
+    const {
+      studentInfo,
+      logbookNotes,
+      logbookImages = [],
+      formatGuideline,
+      customGuidelineText,
+      additionalNotes,
+      referencingStyle = 'apa-7',
+      targetLength = 'comprehensive-20-35',
+    } = req.body as {
+      studentInfo: StudentInfo;
+      logbookNotes?: string;
+      logbookImages?: ImageUpload[];
+      formatGuideline?: string;
+      customGuidelineText?: string;
+      additionalNotes?: string;
+      referencingStyle?: string;
+      targetLength?: string;
+    };
 
-      if (!studentInfo || !studentInfo.name || !studentInfo.institution) {
-        return res.status(200).json({
-          success: false,
-          error: 'Please provide at least the Student Full Name and Higher Institution.',
-        });
-      }
+    if (!studentInfo || !studentInfo.name || !studentInfo.institution) {
+      return res.status(200).json({
+        success: false,
+        error: 'Please provide at least the Student Full Name and Higher Institution.',
+      });
+    }
 
-      if ((!logbookImages || logbookImages.length === 0) && (!logbookNotes || logbookNotes.trim().length === 0)) {
-        return res.status(200).json({
-          success: false,
-          error: 'Please upload at least one scanned logbook page or provide logbook activity notes.',
-        });
-      }
+    if ((!logbookImages || logbookImages.length === 0) && (!logbookNotes || logbookNotes.trim().length === 0)) {
+      return res.status(200).json({
+        success: false,
+        error: 'Please upload at least one scanned logbook page or provide logbook activity notes.',
+      });
+    }
 
-      const styleNames: Record<string, string> = {
-        'apa-7': 'APA 7th Edition (Author, Year)',
-        'ieee': 'IEEE Style ([1] Numbered Citations)',
-        'harvard': 'Harvard Style (Author, Year)',
-        'mla': 'MLA 9th Edition',
-        'vancouver': 'Vancouver / Numeric Style',
-      };
-      const activeStyleName = styleNames[referencingStyle] || 'APA 7th Edition';
+    const styleNames: Record<string, string> = {
+      'apa-7': 'APA 7th Edition (Author, Year)',
+      'ieee': 'IEEE Style ([1] Numbered Citations)',
+      'harvard': 'Harvard Style (Author, Year)',
+      'mla': 'MLA 9th Edition',
+      'vancouver': 'Vancouver / Numeric Style',
+    };
+    const activeStyleName = styleNames[referencingStyle] || 'APA 7th Edition';
 
-      const systemInstruction = `You are an expert academic technical writing specialist, university dissertation examiner, and engineering evaluator specializing in higher institution Students Industrial Work Experience Scheme (SIWES) technical reports formatted for physical binding and defense submission.
+    // Depth guidance tailored so even standard format strictly exceeds 18-25+ academic pages
+    const depthTargets: Record<string, { part1Words: string; part2Words: string; part3Words: string; desc: string }> = {
+      'standard-15-20': {
+        part1Words: '2,000 - 2,600 words',
+        part2Words: '2,800 - 3,600 words',
+        part3Words: '2,000 - 2,600 words',
+        desc: 'Expanded Standard Technical Report (18-26+ typed A4 pages, 6,800+ total words)',
+      },
+      'comprehensive-20-35': {
+        part1Words: '2,600 - 3,400 words',
+        part2Words: '3,600 - 4,800 words',
+        part3Words: '2,500 - 3,400 words',
+        desc: 'Comprehensive Defense Monograph (25-35+ typed A4 pages, 8,700+ total words)',
+      },
+      'exhaustive-35-50': {
+        part1Words: '3,200 - 4,200 words',
+        part2Words: '4,800 - 6,500 words',
+        part3Words: '3,200 - 4,200 words',
+        desc: 'Exhaustive Academic Dissertation-Grade Report (35-50 typed A4 pages, 11,200+ total words)',
+      },
+    };
+    const depthConfig = depthTargets[targetLength] || depthTargets['comprehensive-20-35'];
 
-Your goal is to transform student industrial work experience logbooks and departmental guidelines into an exemplary, highly comprehensive, exhaustive, and defense-ready SIWES Technical Report (equivalent to 20 to 50 standard typed academic pages depending on student input).
-
-CRITICAL DIRECTIVES FOR MAXIMUM ACADEMIC DEPTH & VOLUME:
-1. VOICE, ACADEMIC RIGOR & EXPANSION:
-   - This must be an extensive, highly detailed, scholarly, and publication-ready technical document suitable for physical binding and defense submission.
-   - Do NOT summarize or shorten sections into brief bullet points. Write extensive multi-paragraph technical expositions with rigorous explanations of operating principles, chemical/biological mechanisms, mechanical dynamics, software algorithms, network schematics, mathematical formulations, and engineering standards.
-   - Read the student's logbook notes and attached files thoroughly. Take every recorded activity and expand it into thorough, academic depth—explaining principles of operation, technical methodology, health & safety precautions (HSE), machinery/software specifications, and troubleshooting steps.
-
-2. REPORT CHAPTER STRUCTURE (Start directly with # DEDICATION, as the institutional Cover Sheet and Supervisor Certification Sheet are compiled automatically by the system):
-   - # DEDICATION
-   - # ACKNOWLEDGEMENTS (Acknowledging University/Polytechnic Directorate, Host Organization, Supervisors, Family)
-   - # ABSTRACT / EXECUTIVE SUMMARY (Concise 250-350 word academic summary)
-   - # TABLE OF CONTENTS (Structured list of chapters and sub-sections)
-   - # CHAPTER ONE: INTRODUCTION & ESTABLISHMENT PROFILE
-     ## 1.1 Background, Legal Mandate, and Objectives of the Industrial Attachment (Citing ITF Act and institutional mandates)
-     ## 1.2 History, Scale & Profile of the Host Establishment (${studentInfo.hostOrg || 'Host Establishment'})
-     ## 1.3 Mission, Vision, Quality Policies, and Core Corporate Values
-     ## 1.4 Organizational Structure & Comprehensive Organogram Description
-     ## 1.5 Key Operational Units, Functional Departments, and Interrelationships
-   - # CHAPTER TWO: INDUSTRIAL SAFETY, TOOLS, EQUIPMENT & WORK ENVIRONMENT
-     ## 2.1 Industrial Safety Framework & Health (HSE) Regulations
-     ## 2.2 Hazard Identification, Risk Assessment (HIRA) & Personal Protective Equipment (PPE)
-     ## 2.3 Comprehensive Catalog of Major Machinery, Instruments, Hardware, and Software Utilized (Detailed working principles, manufacturer specifications, calibration, and operational parameters)
-   - # CHAPTER THREE: INDUSTRIAL EXPERIENCE & DETAILED TECHNICAL ACTIVITIES
-     ## 3.1 Overview of Departmental Deployment & Rotations (${studentInfo.unit || 'Assigned Unit'})
-     ## 3.2 Comprehensive Weekly Activity Matrix (An exhaustive Markdown Table covering the weekly progression with Week, Unit/Area, Specific Tasks, Machinery/Tools/Software Utilized, and Engineering Principles Applied)
-     ## 3.3 Major Technical Projects & Case Studies (Deep-dive, step-by-step breakdown of at least 3-5 distinct major projects or tasks completed, detailing background, theoretical principles, step-by-step methodology, apparatus/software, observations, safety precautions, and diagnostic/testing results)
-     ## 3.4 Technical Workflows, Schematics, and Flowchart Descriptions (Include [Figure 3.1: ...], [Figure 3.2: ...] with descriptive architectural/process breakdowns)
-   - # CHAPTER FOUR: SUMMARY OF INDUSTRIAL TRAINING (IT) EXPERIENCE, CHALLENGES AND SOLUTIONS
-     ## 4.1 Summary of Industrial Training Experience (An extensive, comprehensive synthesis of the student's entire industrial attachment, work culture, multi-unit rotations, core competencies mastered, and direct operational contributions made to ${studentInfo.hostOrg || 'the establishment'} before challenges and solutions)
-     ## 4.2 Industrial, Technical, and Operational Challenges Encountered (Detailed analysis of operational bottlenecks, hardware/software incompatibilities, system breakdowns, environmental/safety hazards, and resource limitations)
-     ## 4.3 Practical Troubleshooting and Solutions Proffered (Direct engineering, scientific, and systematic methodologies deployed to troubleshoot and resolve each challenge)
-     ## 4.4 Technical Competencies Acquired, Professional Ethics & Personal Growth (Synthesis of soft skills, professional engineering ethics, safety culture, and industry readiness)
-   - # CHAPTER FIVE: CONCLUSION, RECOMMENDATIONS & IMPACT
-     ## 5.1 Conclusion (Comprehensive synthesis of industrial attachment outcomes and professional maturation)
-     ## 5.2 Recommendations to the Academic Institution
-     ## 5.3 Recommendations to the Host Establishment
-     ## 5.4 Strategic Advice to Prospective SIWES Students
-   - # REFERENCES (Authentic scholarly textbooks, engineering manuals, peer-reviewed journals, and statutory guidelines formatted strictly in ${activeStyleName})
-   - # APPENDIX (Form verification reference, logbook entry notes)
-
-3. SCHOLARLY CITATIONS & REFERENCES (${activeStyleName}):
-   - Include genuine, peer-reviewed academic textbooks, authoritative industry manuals, published conference abstracts, and recognized journals specific to the student's field (${studentInfo.department || 'the discipline'}).
-   - For engineering/computing/sciences, cite recognized standard literature (e.g., Sommerville, Silberschatz, Pressman for Computing; Shigley/Budynas, Theraja, Boylestad for Engineering; Lehninger, Cheesbrough for Sciences; and official Industrial Training Fund [ITF] guidelines).
-   - Integrate in-text citations naturally in Chapters 1, 2, and 3 (e.g., citing authors/year for methodologies, standard procedures, and technical principles).
-   - In the # REFERENCES section, list at least 8-12 complete, academically authentic references strictly formatted in ${activeStyleName}.
-
-4. PRESENTATION DISCIPLINE (PLAIN FORMATTING):
-   - Do NOT output any duplicate cover page, student name headers, or signature lines at the beginning. Start immediately with # DEDICATION.
-   - The report must be completely plain and formal. Do not include any decorative designs, HTML styling, font colors, emojis, badges, or callout blocks.
-   - Always use standard markdown headers (# for Chapter titles, ## for Sections, ### for Sub-sections), plain standard markdown tables (| Header 1 | Header 2 |), plain paragraphs, and numbered or bulleted lists.
-   - Ensure clean, academic prose suitable for direct physical printing and binding.`;
-
-      // Build contents parts (images + prompt)
-      const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
-
-      // Add scanned files if provided (PDFs or images)
-      if (logbookImages && logbookImages.length > 0) {
-        for (let i = 0; i < Math.min(logbookImages.length, 8); i++) {
-          const img = logbookImages[i];
-          if (img.base64 && img.mimeType) {
-            const cleanBase64 = img.base64.replace(/^data:[^;]+;base64,/, '').trim();
-            parts.push({
-              inlineData: {
-                mimeType: img.mimeType,
-                data: cleanBase64,
-              },
-            });
-          }
+    // Stage 0: If scanned PDFs or page photos were uploaded, extract complete structured transcript once
+    let consolidatedLogbookText = logbookNotes?.trim() || '';
+    if (logbookImages && logbookImages.length > 0) {
+      const scanParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+      for (let i = 0; i < Math.min(logbookImages.length, 8); i++) {
+        const img = logbookImages[i];
+        if (img.base64 && img.mimeType) {
+          const cleanBase64 = img.base64.replace(/^data:[^;]+;base64,/, '').trim();
+          scanParts.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: cleanBase64,
+            },
+          });
         }
       }
 
-      const promptText = `
+      if (scanParts.length > 0) {
+        scanParts.push({
+          text: `Inspect ALL uploaded scanned SIWES logbook documents/pages carefully.
+Extract EVERY single recorded week, date range, daily/weekly task, machine/tool/software mentioned, technical observation, safety precaution, and supervisor remark in chronological order.
+Be exhaustive—do not skip any week or detail. Format clearly week-by-week (Week 1, Week 2, etc.).`,
+        });
+
+        const extractedText = await generateContentWithFallback(ai, {
+          label: 'OCR-Extract',
+          systemInstruction:
+            'You are a meticulous academic document transcriber specializing in extracting complete week-by-week industrial training logbook records from scanned PDFs and photographs.',
+          parts: scanParts,
+        });
+
+        consolidatedLogbookText = consolidatedLogbookText
+          ? `STUDENT TYPED NOTES:\n${consolidatedLogbookText}\n\nTRANSCRIBED SCANNED LOGBOOK RECORDS:\n${extractedText}`
+          : extractedText;
+      }
+    }
+
+    const validStyle = (['apa-7', 'ieee', 'harvard', 'mla', 'vancouver'].includes(referencingStyle)
+      ? referencingStyle
+      : 'apa-7') as ReferencingStyle;
+
+    const canonicalRefs = getRecommendedReferencesForStudent(
+      studentInfo.department || '',
+      studentInfo.faculty || '',
+      validStyle
+    );
+
+    const sharedBibliographyBlock = canonicalRefs
+      .map((r, i) => `${i + 1}. In-text token: "${r.inText}" -> Full Reference: ${r.formatted}`)
+      .join('\n');
+
+    const sharedContext = `
 STUDENT & ATTACHMENT PROFILE:
 - Full Name: ${studentInfo.name}
 - Matriculation/Reg Number: ${studentInfo.matricNo || 'N/A'}
@@ -273,129 +275,296 @@ STUDENT & ATTACHMENT PROFILE:
 - Institutional/Academic Supervisor: ${studentInfo.academicSupervisor || 'Dr./Prof. Institutional Supervisor'}
 - Head of Department: ${studentInfo.headOfDepartment || 'Head of Department'}
 
-SELECTED TECHNICAL REPORT FORMAT & CITATION STYLE:
+FORMAT & ACADEMIC SPECIFICATIONS:
 - Format Standard: ${formatGuideline || 'Universal 5-Chapter Technical Report Standard'}
-- Target Depth / Volume: ${targetLength} (Generate maximum academic depth, detailed multi-week activity matrix, and at least 3-5 comprehensive technical case studies equivalent to 20-50 pages)
-- Referencing Style: ${activeStyleName} (Generate authentic discipline-specific books and journals with in-text citations)
-- Chapter 4 Requirement: You MUST include Section 4.1 "Summary of Industrial Training Experience" before Section 4.2 "Industrial and Operational Challenges Encountered".
+- Target Volume: ${depthConfig.desc}
+- Referencing Style: ${activeStyleName}
 ${customGuidelineText ? `CUSTOM DEPARTMENTAL INSTRUCTIONS:\n${customGuidelineText}\n` : ''}
 ${additionalNotes ? `SPECIAL EMPHASIS DIRECTIVES:\n${additionalNotes}\n` : ''}
 
-STUDENT LOGBOOK NOTES & TRANSCRIPT:
-${logbookNotes && logbookNotes.trim().length > 0 ? logbookNotes : 'Please inspect the attached scanned logbook PDF document or page photos directly and extract all recorded activities, dates, equipment, and remarks.'}
+CANONICAL REFERENCE CATALOG FOR IN-TEXT CITATIONS (${activeStyleName}):
+All chapters MUST draw from and cite these verified references using their EXACT in-text tokens where technically, legally, or theoretically applicable:
+${sharedBibliographyBlock}
 
-TASK:
-Analyze all the scanned logbook PDF documents, page images, and notes provided above. Read through each week of activities in the scanned logbook. Synthesize every activity into an exhaustive, highly detailed, and defense-ready SIWES Technical Report according to the required 5-chapter structure. Ensure it is ready for physical printing and submission. Return the report in full markdown format.`;
+COMPLETE LOGBOOK RECORDS & WEEKLY ACTIVITIES:
+${consolidatedLogbookText}
+`;
 
-      parts.push({ text: promptText });
+    const formattingRules = `PRESENTATION & CITATION DISCIPLINE (STRICT ACADEMIC STANDARDS):
+- The report must be completely plain, formal, and scholarly for direct physical printing and binding.
+- Do NOT include any decorative designs, HTML tags, emojis, badges, images, markdown image tags (![...]), or callout blocks.
+- Use standard markdown headers (# for Chapter/Major titles, ## for Sections, ### for Sub-sections), plain standard markdown tables (| Header 1 | Header 2 |), and rich multi-paragraph justified academic prose.
+- Do NOT generate a cover page or signature certification page (handled automatically by the frontend exporter).
+- MANDATORY IN-TEXT CITATIONS: Every chapter MUST include substantive in-text citations in ${activeStyleName} whenever referencing statutory frameworks (e.g., SIWES/ITF laws), HSE/OSHA/ISO safety protocols, operating principles of equipment/software, theoretical equations/algorithms, or industry best practices. Use the exact in-text tokens from the Canonical Reference Catalog above so that every in-text citation corresponds accurately to the # REFERENCES section.`;
 
-      const reportMarkdown = await generateContentWithFallback(ai, {
-        systemInstruction,
-        parts,
-      });
+    // Run 3 specialized generation parts in parallel so every chapter achieves full academic depth without truncation
+    const part1Prompt = `${sharedContext}
 
-      const wordCount = reportMarkdown.split(/\s+/).filter(Boolean).length;
+TASK FOR PART 1 (PRELIMINARIES + CHAPTER 1 + CHAPTER 2):
+Write ONLY the Preliminary Sections, Chapter One, and Chapter Two in exhaustive academic detail.
+Target length for Part 1: ${depthConfig.part1Words}.
 
-      return res.json({
-        success: true,
-        reportMarkdown,
-        wordCount,
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (err: unknown) {
-      console.error('Error generating SIWES report:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate SIWES report';
+Required Exact Structure:
+# DEDICATION
+(Formal academic dedication)
+
+# ACKNOWLEDGEMENTS
+(Formal multi-paragraph acknowledgement of the Institution, ITF/SIWES Directorate, ${studentInfo.hostOrg || 'Host Organization'}, ${studentInfo.industrySupervisor || 'Industry Supervisor'}, ${studentInfo.academicSupervisor || 'Academic Supervisor'}, colleagues, and family)
+
+# ABSTRACT / EXECUTIVE SUMMARY
+(Rigorous 300-400 word scholarly abstract summarizing the industrial attachment scope, technical operations, methodologies deployed, key outcomes, and conclusions)
+
+# TABLE OF CONTENTS
+(Complete structured outline covering Chapters 1 to 5 including 3.2 Weekly Activity Matrix, 3.3 In-Depth Weekly Activity Breakdown & Technical Narrative, 4.1 Comprehensive Summary of Industrial Training Experience, 5.1 Detailed Conclusion, References, and Appendix)
+
+# CHAPTER ONE: INTRODUCTION & ESTABLISHMENT PROFILE
+## 1.1 Background, Legal Mandate, and Objectives of SIWES (Extensive academic exposition citing the ITF Decree/Act No. 47 of 1971, institutional mandate, and role in bridging theory and practice—MUST include in-text citations to ITF and Mafe from the Canonical Reference Catalog)
+## 1.2 History, Scale, and Corporate Profile of ${studentInfo.hostOrg || 'the Host Establishment'} (Thorough profile of operations, market/technical scope, and industrial relevance)
+## 1.3 Mission, Vision, Quality Policies, and Core Corporate Values
+## 1.4 Organizational Structure & Comprehensive Organogram Description (Detailed breakdown of governance, reporting lines, and departmental hierarchy)
+## 1.5 Key Operational Units, Functional Departments, and Interrelationships
+
+# CHAPTER TWO: INDUSTRIAL SAFETY, TOOLS, EQUIPMENT & WORK ENVIRONMENT
+## 2.1 Industrial Safety Framework & Health, Safety and Environment (HSE) Regulations (Detailed statutory and workplace safety protocols relevant to ${studentInfo.department || 'the discipline'}—MUST cite OSHA / statutory safety references in-text)
+## 2.2 Hazard Identification, Risk Assessment (HIRA) & Personal Protective Equipment (PPE) (Comprehensive table/analysis of workplace hazards, risk controls, and PPE specifications with relevant safety citations)
+## 2.3 Comprehensive Catalog of Major Machinery, Instruments, Hardware, and Software Utilized (Exhaustive technical catalog derived from the student's logbook and unit—detailing working principles, technical specifications, calibration, operational parameters, and maintenance standards, citing foundational engineering/computing/science literature from the Canonical Reference Catalog)
+
+STOP immediately after completing Section 2.3. Do NOT write Chapter 3 yet.`;
+
+    const part2Prompt = `${sharedContext}
+
+TASK FOR PART 2 (CHAPTER THREE - EXHAUSTIVE INDUSTRIAL ACTIVITIES & WEEK-BY-WEEK TECHNICAL NARRATIVE):
+Write ONLY Chapter Three in maximum, defense-grade engineering/scientific depth.
+Target length for Part 2: ${depthConfig.part2Words}.
+
+Required Exact Structure:
+# CHAPTER THREE: INDUSTRIAL EXPERIENCE & DETAILED TECHNICAL ACTIVITIES
+## 3.1 Overview of Departmental Deployment & Rotations (${studentInfo.unit || 'Assigned Unit'})
+(Detailed narrative of onboarding, induction, workstation/unit assignment, workflow supervision, and rotation schedule.)
+
+## 3.2 Comprehensive Weekly Activity Matrix
+(Construct an exhaustive Markdown Table covering EVERY SINGLE WEEK from the logbook/duration with columns:
+| Week | Unit / Section | Specific Technical Activities Performed | Equipment, Tools & Software Utilized | Technical / Scientific Principles Applied |)
+
+## 3.3 In-Depth Weekly Activity Breakdown & Technical Narrative
+(CRITICAL MANDATE: This section MUST come directly AFTER the Section 3.2 Matrix!
+Systematically create an individual subsection for EVERY SINGLE WEEK logged—e.g.:
+### Week 1: [Descriptive Technical Title]
+### Week 2: [Descriptive Technical Title]
+...continuing sequentially through every single week of the student's logbook/attachment!
+For EACH week, write 2 to 3 substantial, rigorous academic paragraphs explaining:
+- Exact operational steps and methodologies executed during that week;
+- Underlying engineering, computing, or scientific principles and theoretical mechanisms (cite relevant textbooks/journals from the Canonical Reference Catalog in ${activeStyleName} where theoretical concepts, standards, or equations apply);
+- Hardware specifications, software stacks, instruments, reagents, or parameters configured/monitored;
+- Safety precautions (HSE), quality assurance checks, supervisor feedback, and technical observations/outcomes.
+Do NOT compress multiple weeks together unless the source logbook explicitly grouped them, and never write brief 1-sentence summaries!)
+
+## 3.4 Major Technical Projects & Case Studies
+(Present 4 to 5 comprehensive, deep-dive engineering/scientific case studies drawn from the student's work. For each project include: Background & Problem Statement, Theoretical Framework [with academic in-text citations], Apparatus/Tools/Tech Stack, Step-by-Step Execution Methodology, Diagnostic/Testing/Performance Results, and Safety Controls.)
+
+## 3.5 Technical Workflows, System Architecture, and Operational Process Descriptions
+(Detailed narrative explanations of core system architectures, process pipelines, diagnostic workflows, and quality control loops encountered at ${studentInfo.hostOrg || 'the host establishment'}, backed by in-text citations to standard engineering/computing/scientific methodologies.)
+
+Start directly with # CHAPTER THREE: INDUSTRIAL EXPERIENCE & DETAILED TECHNICAL ACTIVITIES and STOP after completing Section 3.5. Do NOT include any images or photo tags.`;
+
+    const part3Prompt = `${sharedContext}
+
+TASK FOR PART 3 (CHAPTER FOUR + CHAPTER FIVE + REFERENCES + APPENDIX):
+Write ONLY Chapter Four, Chapter Five, References, and Appendix in exhaustive academic rigor.
+Target length for Part 3: ${depthConfig.part3Words}.
+
+Required Exact Structure:
+# CHAPTER FOUR: SUMMARY OF INDUSTRIAL TRAINING (IT) EXPERIENCE, CHALLENGES AND SOLUTIONS
+## 4.1 Comprehensive Summary of Industrial Training (IT) Experience
+(CRITICAL REQUIREMENT: Write an exhaustive, deeply analytical synthesis of **800 to 1,200 words** BEFORE Challenges & Solutions! Organize across multiple well-developed paragraphs covering:
+- Holistic overview of the entire ${studentInfo.duration || 'attachment'} industrial immersion at ${studentInfo.hostOrg || 'the host organization'};
+- Synthesis of multi-unit technical operations, daily engineering/scientific workflows, and practical skills mastered;
+- Explicit analysis of how classroom theoretical courses in ${studentInfo.department || 'the student’s discipline'} translated into real-world industrial problem-solving (with relevant in-text citations from the Canonical Reference Catalog);
+- Concrete operational deliverables, process improvements, and measurable contributions made to the host organization;
+- Cross-functional teamwork, reporting discipline, and supervisory mentorship experienced.)
+
+## 4.2 Industrial, Technical, and Operational Challenges Encountered
+(Detailed multi-paragraph analysis of 5 to 7 genuine technical, infrastructural, workflow, equipment, compatibility, or environmental challenges encountered during the attachment.)
+
+## 4.3 Practical Troubleshooting and Solutions Proffered
+(Systematic, step-by-step engineering, scientific, and operational troubleshooting methodologies deployed to mitigate and resolve each challenge listed in 4.2, citing recognized technical literature/standards where applicable.)
+
+## 4.4 Technical Competencies Acquired, Professional Ethics & Personal Growth
+(Detailed evaluation of hard technical competencies, soft skills, time management, workplace ethics, safety consciousness, and career readiness.)
+
+# CHAPTER FIVE: CONCLUSION, RECOMMENDATIONS & IMPACT
+## 5.1 Detailed Conclusion
+(CRITICAL REQUIREMENT: Write an exhaustive, substantive **600 to 900 word** scholarly conclusion—NOT a short wrap-up! Systematically evaluate:
+- Overall attainment of the statutory SIWES objectives and departmental learning outcomes, citing statutory ITF/SIWES literature where appropriate;
+- Synthesis of the transformative technical, analytical, and professional growth achieved during the ${studentInfo.duration || 'attachment'} period;
+- Long-term impact of the training on the student's academic capstone preparation, professional engineering/scientific identity, and national industrial manpower readiness;
+- Final closing appraisal of the partnership between ${studentInfo.institution || 'the institution'} and ${studentInfo.hostOrg || 'the host establishment'}.)
+
+## 5.2 Recommendations to the Academic Institution (${studentInfo.institution || 'Institution'})
+(Specific, actionable multi-paragraph recommendations regarding curriculum modernization, laboratory/workshop upgrades, SIWES supervision, and academic-industry linkage.)
+
+## 5.3 Recommendations to the Host Establishment (${studentInfo.hostOrg || 'Host Organization'})
+(Constructive, actionable recommendations regarding intern onboarding, equipment maintenance/redundancy, tooling, safety culture, and structured mentorship.)
+
+## 5.4 Strategic Advice to Prospective SIWES Students
+(Detailed, practical guidance on placement preparation, logbook documentation discipline, workplace attitude, safety compliance, and technical curiosity.)
+
+# REFERENCES
+(CRITICAL REQUIREMENT: List EVERY reference from the Canonical Reference Catalog above using the EXACT formatting shown for ${activeStyleName}, PLUS 2 to 4 additional verified, real peer-reviewed textbooks/journals/standards relevant to ${studentInfo.department || 'the discipline'}—making at least 10 to 14 complete entries formatted strictly in ${activeStyleName}. Ensure exact correspondence with the in-text citations used across Chapters 1 to 5.)
+
+# APPENDIX
+(Structured verification reference, summary of logbook endorsement milestones, and industrial abbreviations/glossary table.)
+
+Start directly with # CHAPTER FOUR: SUMMARY OF INDUSTRIAL TRAINING (IT) EXPERIENCE, CHALLENGES AND SOLUTIONS.`;
+
+    const baseSystem = `You are a senior university engineering/science dissertation examiner and SIWES technical report specialist.
+Produce publication-ready academic prose suitable for hardcover university binding and oral defense.
+${formattingRules}`;
+
+    // Execute the 3 parts concurrently with minor stagger to avoid burst throttling
+    const [part1Markdown, part2Markdown, part3Markdown] = await Promise.all([
+      generateContentWithFallback(ai, {
+        label: 'Part1-Ch1-2',
+        systemInstruction: baseSystem,
+        parts: [{ text: part1Prompt }],
+      }),
+      new Promise<string>((resolve) => setTimeout(resolve, 250)).then(() =>
+        generateContentWithFallback(ai, {
+          label: 'Part2-Ch3',
+          systemInstruction: baseSystem,
+          parts: [{ text: part2Prompt }],
+        })
+      ),
+      new Promise<string>((resolve) => setTimeout(resolve, 500)).then(() =>
+        generateContentWithFallback(ai, {
+          label: 'Part3-Ch4-5-Refs',
+          systemInstruction: baseSystem,
+          parts: [{ text: part3Prompt }],
+        })
+      ),
+    ]);
+
+    const reportMarkdown = [part1Markdown.trim(), part2Markdown.trim(), part3Markdown.trim()]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const wordCount = reportMarkdown.split(/\s+/).filter(Boolean).length;
+
+    return res.json({
+      success: true,
+      reportMarkdown,
+      wordCount,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err: unknown) {
+    console.error('Error generating SIWES report:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Failed to generate SIWES report';
+    return res.status(200).json({
+      success: false,
+      error: errorMessage,
+    });
+  }
+});
+
+// Expand / Deepen a specific report section to reach 25-50 pages
+apiRouter.post('/expand-chapter', async (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  try {
+    if (!process.env.GEMINI_API_KEY) {
       return res.status(200).json({
         success: false,
-        error: errorMessage,
+        error: 'GEMINI_API_KEY is not configured on the server.',
       });
     }
-  });
 
-  // Expand / Deepen a specific report section to reach 20-50 pages
-  apiRouter.post('/expand-chapter', async (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'application/json');
-    try {
-      if (!process.env.GEMINI_API_KEY) {
-        return res.status(200).json({
-          success: false,
-          error: 'GEMINI_API_KEY is not configured on the server.',
-        });
-      }
+    const {
+      fullReportMarkdown,
+      studentInfo,
+      referencingStyle = 'apa-7',
+    } = req.body as {
+      fullReportMarkdown: string;
+      chapterKey?: string;
+      studentInfo: StudentInfo;
+      referencingStyle?: string;
+    };
 
-      const {
-        fullReportMarkdown,
-        chapterKey,
-        studentInfo,
-        referencingStyle = 'apa-7',
-      } = req.body as {
-        fullReportMarkdown: string;
-        chapterKey: string;
-        studentInfo: StudentInfo;
-        referencingStyle?: string;
-      };
+    if (!fullReportMarkdown || fullReportMarkdown.trim().length < 50) {
+      return res.status(200).json({
+        success: false,
+        error: 'Valid report content is required for expansion.',
+      });
+    }
 
-      if (!fullReportMarkdown || fullReportMarkdown.trim().length < 50) {
-        return res.status(200).json({
-          success: false,
-          error: 'Valid report content is required for expansion.',
-        });
-      }
+    const styleNames: Record<string, string> = {
+      'apa-7': 'APA 7th Edition',
+      'ieee': 'IEEE Style',
+      'harvard': 'Harvard Style',
+      'mla': 'MLA 9th Edition',
+      'vancouver': 'Vancouver Style',
+    };
+    const activeStyleName = styleNames[referencingStyle] || 'APA 7th Edition';
 
-      const styleNames: Record<string, string> = {
-        'apa-7': 'APA 7th Edition',
-        'ieee': 'IEEE Style',
-        'harvard': 'Harvard Style',
-        'mla': 'MLA 9th Edition',
-        'vancouver': 'Vancouver Style',
-      };
-      const activeStyleName = styleNames[referencingStyle] || 'APA 7th Edition';
+    const validStyle = (['apa-7', 'ieee', 'harvard', 'mla', 'vancouver'].includes(referencingStyle)
+      ? referencingStyle
+      : 'apa-7') as ReferencingStyle;
 
-      const systemInstruction = `You are an expert academic technical writing specialist and university dissertation supervisor.
-Your task is to take an existing SIWES technical report and substantially expand its technical depth, analytical density, and academic volume to reach an exhaustive 20-50 page monograph standard.
+    const canonicalRefs = getRecommendedReferencesForStudent(
+      studentInfo.department || '',
+      studentInfo.faculty || '',
+      validStyle
+    );
+    const sharedBibliographyBlock = canonicalRefs
+      .map((r, i) => `${i + 1}. In-text token: "${r.inText}" -> Full Reference: ${r.formatted}`)
+      .join('\n');
+
+    const systemInstruction = `You are an expert academic technical writing specialist and university dissertation supervisor.
+Your task is to take an existing SIWES technical report and substantially expand its technical depth, analytical density, and academic volume to reach an exhaustive 30-50 page monograph standard.
 
 Focus on expanding:
-1. CHAPTER THREE: Add 2-3 additional deep-dive engineering/scientific case studies, full operational procedures, detailed testing parameters, and equipment specifications.
-2. CHAPTER FOUR: Ensure Section 4.1 "Summary of Industrial Training Experience" provides an extensive synthesis of the entire attachment period before Section 4.2 Challenges and 4.3 Solutions.
-3. REFERENCES: Ensure at least 10-12 authentic discipline-specific books, peer-reviewed journals, and standards in ${activeStyleName} with corresponding in-text citations.
+1. CHAPTER THREE (Section 3.3 & 3.4): Expand every individual week in Section 3.3 "In-Depth Weekly Activity Breakdown & Technical Narrative" with deeper engineering/scientific theory, operational steps, and HSE controls, plus add 2 additional major technical case studies in Section 3.4.
+2. CHAPTER FOUR (Section 4.1): Deepen "Summary of Industrial Training (IT) Experience" into a comprehensive 1,000+ word multi-paragraph synthesis before Challenges and Solutions.
+3. CHAPTER FIVE (Section 5.1): Expand "Detailed Conclusion" into a substantive 700-900 word academic synthesis with deeper institutional and industry recommendations.
+4. IN-TEXT CITATIONS & REFERENCES: Integrate in-text citations naturally wherever technical principles, standards, or methodologies are discussed across all chapters, using these verified references and matching them 1-to-1 in # REFERENCES (${activeStyleName}):
+${sharedBibliographyBlock}
 
-Return the complete, expanded report in markdown. Keep all existing chapters, enhance their depth, and output the entire expanded report.`;
+Do NOT include any images or markdown image tags. Return the complete, expanded report in clean markdown.`;
 
-      const promptText = `
+    const promptText = `
 STUDENT PROFILE:
 - Name: ${studentInfo.name}
 - Department: ${studentInfo.department}
 - Host Organization: ${studentInfo.hostOrg}
 - Unit: ${studentInfo.unit}
 
-CURRENT TECHNICAL REPORT (To expand into 20-50 page academic volume):
+CURRENT TECHNICAL REPORT (To expand into 30-50 page academic volume):
 ${fullReportMarkdown}
 
 TASK:
-Substantially expand and deepen this report. Add technical case studies, expand the weekly matrix with deep technical commentary, ensure Chapter 4 Section 4.1 "Summary of Industrial Training Experience" is rich and detailed, and expand scholarly references formatted in ${activeStyleName}. Return the full expanded report in clean markdown.`;
+Substantially expand and deepen every chapter of this report while preserving its exact 5-chapter structure. Deepen Section 3.3 week-by-week explanations, Section 4.1 Detailed IT Summary, Section 5.1 Detailed Conclusion, and expand scholarly references formatted in ${activeStyleName}. Return the full expanded report in clean markdown.`;
 
-      const expandedMarkdown = await generateContentWithFallback(ai, {
-        systemInstruction,
-        parts: [{ text: promptText }],
-      });
+    const expandedMarkdown = await generateContentWithFallback(ai, {
+      label: 'Expand-Report',
+      systemInstruction,
+      parts: [{ text: promptText }],
+    });
 
-      const wordCount = expandedMarkdown.split(/\s+/).filter(Boolean).length;
+    const wordCount = expandedMarkdown.split(/\s+/).filter(Boolean).length;
 
-      return res.json({
-        success: true,
-        reportMarkdown: expandedMarkdown,
-        wordCount,
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (err: unknown) {
-      console.error('Error expanding chapter:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to expand report section';
-      return res.status(200).json({
-        success: false,
-        error: errorMessage,
-      });
-    }
-  });
+    return res.json({
+      success: true,
+      reportMarkdown: expandedMarkdown,
+      wordCount,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err: unknown) {
+    console.error('Error expanding chapter:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Failed to expand report section';
+    return res.status(200).json({
+      success: false,
+      error: errorMessage,
+    });
+  }
+});
 
   // Pre-Defense Evaluation Endpoint
   apiRouter.post('/coordinator-review', async (req: Request, res: Response) => {
